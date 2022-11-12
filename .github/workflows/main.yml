@@ -5,10 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     name: A job to say hello
     steps:
-      - name: Hello world action step
-        id: hello
-        #uses: rscohn2/setup-oneapi@v1.1
-        uses: ./
+    - uses: actions/checkout@v2
+    - uses: ./
         with:
           components: |
             tbb
