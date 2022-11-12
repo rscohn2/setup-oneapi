@@ -1,10 +1,9 @@
-name: 'Hello World'
-description: 'Greet someone and record the time'
+name: 'Setup oneAPI'
+description: 'Install oneAPI components'
 inputs:
-  who-to-greet:  # id of input
-    description: 'Who to greet'
+  components:  
+    description: 'Components to install'
     required: true
-    default: 'World'
 outputs:
   time: # id of output
     description: 'The time we greeted you'
