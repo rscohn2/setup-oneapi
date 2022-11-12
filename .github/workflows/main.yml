@@ -11,3 +11,5 @@ jobs:
         components: |
           tbb
           dpl
+    - run: |
+      source /opt/intel/oneapi/setvars.sh
