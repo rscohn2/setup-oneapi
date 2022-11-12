@@ -13573,7 +13573,7 @@ async function install(component) {
     const url = packages[component]
     console.log(`Installing ${component} from ${url}`)
     const installer_path = await tc.downloadTool(url)
-    await exec.exec('bash', [installer_path, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
+    await exec.exec('sudo', ['bash', installer_path, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
 }
 
 async function install_list(components) {
