@@ -13576,10 +13576,10 @@ async function install(component) {
     await exec.exec('bash', [installer_path, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
 }
 
-function install_list(components) {
+async function install_list(components) {
     console.log(`Installing ${components}`)
     for (const component of components) {
-        install(component)
+        await install(component)
     }
 }
 
