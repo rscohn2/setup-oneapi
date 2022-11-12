@@ -11,5 +11,6 @@ jobs:
         components: |
           tbb
           dpl
-    - run: |
-      source /opt/intel/oneapi/setvars.sh
+    - name: Test install
+      run: |
+        source /opt/intel/oneapi/setvars.sh
