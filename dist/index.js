@@ -13563,17 +13563,19 @@ const core = __nccwpck_require__(4147);
 const github = __nccwpck_require__(7364);
 const tc = __nccwpck_require__(580);
 const exec = __nccwpck_require__(3716);
+const io = __nccwpck_require__(977);
 
-packages = {
+component_urls = {
     'tbb': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19041/l_tbb_oneapi_p_2021.7.1.15005_offline.sh',
     'dpl': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19046/l_oneDPL_p_2021.7.2.15007_offline.sh'
 }
 
 async function install(component) {
-    const url = packages[component]
+    const url = component_urls[component]
     console.log(`Installing ${component} from ${url}`)
     const installer_path = await tc.downloadTool(url)
     await exec.exec('sudo', ['bash', installer_path, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
+    await io.rmRF(installer_path)
 }
 
 async function install_list(components) {
