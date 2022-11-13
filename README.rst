@@ -2,30 +2,30 @@
  setup-oneapi javascript action
 ================================
 
-This action prints "Hello World" or "Hello" + the name of a person to
-greet to the log.
+This action installs oneapi components. See example_.
 
 Inputs
 ======
 
-`who-to-greet`
---------------
+`cache`
+-------
 
-**Required** The name of the person to greet. Default `"World"`.
+Speed up install by using GitHub cache. Default `true`.
 
-Outputs
-=======
+`components`
+------------
 
-`time`
+Components to install. Default none.
+
+`fast`
 ------
 
-The time we greeted you.
+Speed up cache save/restore by removing infrequently used
+files. Default `true`.
 
-Example usage
-=============
+`list`
+------
 
-::
+Show the list of available components. Default `true`.
 
-  uses: actions/setup-oneapi@v1.1
-  with:
-    who-to-greet: 'Mona the Octocat'
+.. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml
