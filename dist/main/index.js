@@ -6726,8 +6726,7 @@ async function install (component) {
   const installerPath = await tc.downloadTool(url)
   await exec.exec('sudo', ['bash', installerPath, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
   await io.rmRF(installerPath)
-  return installerPath
- //return path.parse(installerPath).base
+  return path.parse(url).base
 }
 
 async function installList (components) {
