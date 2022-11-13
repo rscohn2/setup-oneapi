@@ -2688,6 +2688,14 @@ exports["default"] = _default;
 
 /***/ }),
 
+/***/ 695:
+/***/ ((module) => {
+
+module.exports = eval("require")("@actions/cache");
+
+
+/***/ }),
+
 /***/ 491:
 /***/ ((module) => {
 
@@ -2817,11 +2825,13 @@ module.exports = require("util");
 var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
+const cache = __nccwpck_require__(695)
 const core = __nccwpck_require__(147)
 
-function saveCache () {
+async function saveCache () {
   const key = core.getState('key')
   console.log(`Saving install with key ${key}`)
+  await cache.saveCache('/opt/intel/oneapi', key)
 }
 
 try {

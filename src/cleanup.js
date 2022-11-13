@@ -1,8 +1,10 @@
+const cache = require('@actions/cache')
 const core = require('@actions/core')
 
-function saveCache () {
+async function saveCache () {
   const key = core.getState('key')
   console.log(`Saving install with key ${key}`)
+  await cache.saveCache('/opt/intel/oneapi', key)
 }
 
 try {
