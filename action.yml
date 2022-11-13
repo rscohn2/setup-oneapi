@@ -5,7 +5,7 @@ inputs:
     description: 'Components to install'
     required: true
   cache:  
-    description: 'Cache the install`
+    description: 'Cache the install'
 runs:
   using: 'node16'
   main: 'dist/install/index.js'
