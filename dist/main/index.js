@@ -62916,7 +62916,7 @@ async function installList (key, components) {
 function list () {
   if (!core.getInput('list')) { return }
   console.log('Available components:')
-  for (const component of componentUrls) {
+  for (const component in componentUrls) {
     console.log(`  ${component}: ${componentUrls[component]}`)
   }
 }
