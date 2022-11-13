@@ -62942,11 +62942,11 @@ function list () {
   }
 }
 
-function run () {
+async function run () {
   try {
     list()
     const components = core.getMultilineInput('components')
-    if (restoreCache(components)) {
+    if (await restoreCache(components)) {
       return
     }
     installList(components)
