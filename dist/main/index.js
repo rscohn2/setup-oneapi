@@ -62885,6 +62885,9 @@ async function restoreCache (components) {
   let key = ''
   for (const component of components) {
     const url = componentUrls[component]
+    if (!url) {
+      core.error(`Unknown oneapi component: ${component}`)
+    }
     key = key + ':' + path.parse(url).base
   }
   key = key.substring(1)

@@ -12,7 +12,7 @@ jobs:
         components: |
           tbb
           vpl
-          icx
+          foobar
     - name: Test install
       run: |
         source /opt/intel/oneapi/setvars.sh
