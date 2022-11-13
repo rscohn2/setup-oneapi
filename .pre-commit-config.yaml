@@ -1,0 +1,44 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+exclude: 'dist|package-lock.json|package.json'
+
+repos:
+
+- repo: https://github.com/lietu/standardjs-pre-commit
+  rev: 16.0.3
+  hooks:
+    - id: standard
+
+- repo: https://github.com/ambv/black
+  rev: 22.8.0
+  hooks:
+  - id: black
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.3.0
+  hooks:
+  - id: trailing-whitespace
+  - id: end-of-file-fixer
+  - id: mixed-line-ending
+  - id: check-xml
+  - id: check-yaml
+  - id: check-case-conflict
+  - id: check-toml
+  - id: check-json
+  - id: check-added-large-files
+    args: ['--maxkb=800']
+
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.9.2
+  hooks:
+  - id: flake8
+
+- repo: https://github.com/pycqa/doc8
+  rev: v1.0.0
+  hooks:
+  - id: doc8
+
+- repo: https://github.com/pycqa/isort
+  rev: 5.10.1
+  hooks:
+  - id: isort

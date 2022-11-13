@@ -1,12 +1,13 @@
 name: 'Setup oneAPI'
 description: 'Install oneAPI components'
 inputs:
-  components:  
+  components:
     description: 'Components to install'
     required: true
-  cache:  
+  cache:
     description: 'Cache the install'
+    default: true
 runs:
   using: 'node16'
-  main: 'dist/install/index.js'
-  post: 'dist/save_cache/index.js'
+  main: 'dist/main/index.js'
+  post: 'dist/cleanup/index.js'

@@ -24,8 +24,8 @@ The time we greeted you.
 Example usage
 =============
 
-```yaml
-uses: actions/setup-oneapi@v1.1
-with:
-  who-to-greet: 'Mona the Octocat'
-```
+::
+
+  uses: actions/setup-oneapi@v1.1
+  with:
+    who-to-greet: 'Mona the Octocat'
