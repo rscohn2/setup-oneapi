@@ -1,8 +1,8 @@
-================================
- setup-oneapi javascript action
-================================
+==============
+ setup-oneapi
+==============
 
-This action installs oneapi components. See example_.
+This GitHub action installs oneapi components. See example_.
 
 Inputs
 ======
@@ -17,8 +17,8 @@ Speed up install by using GitHub cache. Default `true`.
 
 Components to install. Default none.
 
-`fast`
-------
+`prune`
+-------
 
 Speed up cache save/restore by removing infrequently used
 files. Default `true`.
@@ -26,6 +26,6 @@ files. Default `true`.
 `list`
 ------
 
-Show the list of available components. Default `true`.
+Show the list of available components. Default `false`.
 
 .. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml

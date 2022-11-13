@@ -7,12 +7,12 @@ inputs:
   cache:
     description: 'Cache the install'
     default: true
-  fast:
+  prune:
     description: 'Speed up save/restore by removing infrequently used files'
     default: true
   list:
     description: 'List the available components'
-    defualt: false
+    default: false
 runs:
   using: 'node16'
   main: 'dist/main/index.js'
