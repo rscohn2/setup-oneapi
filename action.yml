@@ -7,6 +7,9 @@ inputs:
   cache:
     description: 'Cache the install'
     default: true
+  fast:
+    description: 'Speed up save/restore by removing infrequently used files'
+    default: true
   list:
     description: 'List the available components'
     defualt: false

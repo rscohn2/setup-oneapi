@@ -40,12 +40,26 @@ async function restoreCache (components) {
   return success
 }
 
+async function cleanupInstall () {
+  if (!core.getInput('fast')) { return }
+
+  const dirs = ['/opt/intel/oneapi/compiler/latest/linux/compiler/lib/ia32_lin',
+    '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
+    '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
+    '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga']
+
+  for (const dir in dirs) {
+    await io.rmRF(dir)
+  }
+}
+
 async function install (component) {
   const url = componentUrls[component]
   console.log(`Installing ${component} from ${url}`)
   const installerPath = await tc.downloadTool(url)
   await exec.exec('sudo', ['bash', installerPath, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
   await io.rmRF(installerPath)
+  cleanupInstall()
 }
 
 async function installList (key, components) {
