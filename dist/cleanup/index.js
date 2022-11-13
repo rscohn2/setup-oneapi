@@ -61878,16 +61878,16 @@ const cache = __nccwpck_require__(9338)
 const core = __nccwpck_require__(4147)
 
 async function saveCache () {
+  const useCache = core.getInput('cache')
+  if (!useCache) return false
+
   const key = core.getState('key')
   console.log(`Saving install with key ${key}`)
   await cache.saveCache(['/opt/intel/oneapi'], key)
 }
 
 try {
-  const cache = core.getInput('cache')
-  if (cache) {
-    saveCache()
-  }
+  saveCache()
 } catch (error) {
   core.setFailed(error.message)
 }
