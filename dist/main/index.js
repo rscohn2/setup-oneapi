@@ -62889,12 +62889,17 @@ async function restoreCache (components) {
   }
   key = key.substring(1)
   console.log(`Key ${key}`)
-  core.saveState('key', key)
 
   console.log('Restoring from cache')
-  const success = await cache.restoreCache(['/opt/intel/oneapi'], key)
-  core.saveState('restoreSucceeded', success)
-  return success
+  const restoreKey = await cache.restoreCache(['/opt/intel/oneapi'], key)
+  console.log(`restoreKey ${restoreKey}`)
+  if (restoreKey) {
+    core.saveState('key', '')
+    return true
+  } else {
+    core.saveState('key', key)
+    return false
+  }
 }
 
 async function cleanupInstall () {

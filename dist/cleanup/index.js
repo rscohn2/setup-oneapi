@@ -61879,9 +61879,10 @@ const core = __nccwpck_require__(4147)
 
 async function saveCache () {
   const useCache = core.getInput('cache')
-  if (!useCache || !core.getState('restoreSucceded')) return
-
   const key = core.getState('key')
+
+  if (!useCache || key === '') return
+
   console.log(`Saving install with key ${key}`)
   await cache.saveCache(['/opt/intel/oneapi'], key)
 }
