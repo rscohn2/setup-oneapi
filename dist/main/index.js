@@ -62882,7 +62882,9 @@ async function restoreCache (components) {
   core.saveState('key', key)
 
   console.log('Restoring from cache')
-  return await cache.restoreCache(['/opt/intel/oneapi'], key, [key])
+  const success = await cache.restoreCache(['/opt/intel/oneapi'], key, [key])
+  core.saveState('restoreSucceeded', success)
+  return success
 }
 
 async function install (component) {

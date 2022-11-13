@@ -61879,7 +61879,7 @@ const core = __nccwpck_require__(4147)
 
 async function saveCache () {
   const useCache = core.getInput('cache')
-  if (!useCache) return false
+  if (!useCache || !core.getState('restoreSucceded')) return
 
   const key = core.getState('key')
   console.log(`Saving install with key ${key}`)
