@@ -1,11 +1,11 @@
 on: [push]
 
 jobs:
-  hello_world_job:
+  install:
     runs-on: ubuntu-latest
-    name: A job to say hello
+    name: Install oneapi tools
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: ./
       with:
         components: |

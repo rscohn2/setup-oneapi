@@ -4,9 +4,10 @@ inputs:
   components:  
     description: 'Components to install'
     required: true
-outputs:
-  time: # id of output
-    description: 'The time we greeted you'
+  cache:  
+    description: 'Cache the install`
+    default: true
 runs:
   using: 'node16'
-  main: 'dist/index.js'
+  main: 'dist/install/index.js'
+  post: 'dist/save_cache/index.js'
