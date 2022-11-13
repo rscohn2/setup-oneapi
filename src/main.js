@@ -35,11 +35,13 @@ async function restoreCache (components) {
 
   console.log('Restoring from cache')
   const restoreKey = await cache.restoreCache(['/opt/intel/oneapi'], key)
-  console.log(`restoreKey ${restoreKey}`)
+
   if (restoreKey) {
+    console.log(`Restore succeeded: ${restoreKey}`)
     core.saveState('key', '')
     return true
   } else {
+    console.log(`Restore failed: ${restoreKey}`)
     core.saveState('key', key)
     return false
   }
