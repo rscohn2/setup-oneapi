@@ -35,7 +35,7 @@ async function restoreCache (components) {
   core.saveState('key', key)
 
   console.log('Restoring from cache')
-  const success = await cache.restoreCache(['/opt/intel/oneapi'], key, [key])
+  const success = await cache.restoreCache(['/opt/intel/oneapi'], key)
   core.saveState('restoreSucceeded', success)
   return success
 }

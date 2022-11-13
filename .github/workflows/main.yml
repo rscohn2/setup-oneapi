@@ -11,6 +11,7 @@ jobs:
         list: true
         components: |
           tbb
+          vpl
     - name: Test install
       run: |
         source /opt/intel/oneapi/setvars.sh
