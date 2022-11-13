@@ -12,6 +12,7 @@ jobs:
         components: |
           tbb
           vpl
+          icx
     - name: Test install
       run: |
         source /opt/intel/oneapi/setvars.sh
