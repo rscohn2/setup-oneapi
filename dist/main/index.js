@@ -62926,7 +62926,7 @@ async function install (component) {
   cleanupInstall()
 }
 
-async function installList (key, components) {
+async function installList (components) {
   console.log(`Installing ${components}`)
 
   for (const component of components) {
@@ -62949,7 +62949,7 @@ async function run () {
     if (await restoreCache(components)) {
       return
     }
-    installList(components)
+    await installList(components)
   } catch (error) {
     core.setFailed(error.message)
   }
