@@ -1,4 +1,5 @@
 const path = require('path')
+const process = require('process')
 
 const cache = require('@actions/cache')
 const core = require('@actions/core')
@@ -30,6 +31,7 @@ async function restoreCache (components) {
     const url = componentUrls[component]
     if (!url) {
       core.error(`Unknown oneapi component: ${component}`)
+      process.exit(1)
     }
     key = key + ':' + path.parse(url).base
   }

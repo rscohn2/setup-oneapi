@@ -62726,6 +62726,14 @@ module.exports = require("path");
 
 /***/ }),
 
+/***/ 7282:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("process");
+
+/***/ }),
+
 /***/ 5477:
 /***/ ((module) => {
 
@@ -62856,6 +62864,7 @@ var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
 const path = __nccwpck_require__(1017)
+const process = __nccwpck_require__(7282)
 
 const cache = __nccwpck_require__(9338)
 const core = __nccwpck_require__(4147)
@@ -62887,6 +62896,7 @@ async function restoreCache (components) {
     const url = componentUrls[component]
     if (!url) {
       core.error(`Unknown oneapi component: ${component}`)
+      process.exit(1)
     }
     key = key + ':' + path.parse(url).base
   }
