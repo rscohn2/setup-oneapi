@@ -3,10 +3,13 @@ description: 'Install oneAPI components'
 inputs:
   components:
     description: 'Components to install'
-    required: true
+    default: ''
   cache:
     description: 'Cache the install'
     default: true
+  list:
+    description: 'List the available components'
+    defualt: false
 runs:
   using: 'node16'
   main: 'dist/main/index.js'
