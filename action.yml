@@ -1,5 +1,8 @@
 name: 'Setup oneAPI'
 description: 'Install oneAPI components'
+branding:
+  icon: 'download-cloud'
+  color: 'blue'
 inputs:
   components:
     description: 'Components to install'
