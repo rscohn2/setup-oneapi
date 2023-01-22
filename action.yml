@@ -16,6 +16,15 @@ inputs:
   list:
     description: 'List the available components'
     default: false
+  # todo add inputs
+  # path:
+  #   description: 'Location to install oneAPI'
+  #   required: false
+  #   default: /opt/intel/oneapi
+  # setvars:
+  #   description: 'Whether to configure the oneAPI environment'
+  #   required: false
+  #   default: true
 runs:
   using: 'node16'
   main: 'dist/main/index.js'
