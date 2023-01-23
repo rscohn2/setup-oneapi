@@ -4,27 +4,27 @@ branding:
   icon: 'download-cloud'
   color: 'blue'
 inputs:
-  components:
-    description: 'Components to install'
-    default: ''
   cache:
     description: 'Cache the install'
     default: true
+  components:
+    description: 'Components to install'
+    default: ''
+  path:
+    description: 'Location to install oneAPI'
+    required: false
+    default: /opt/intel/oneapi
   prune:
     description: 'Speed up save/restore by removing infrequently used files'
     default: true
+  setvars:
+    description: 'Whether to configure the oneAPI environment'
+    required: false
+    default: true
   list:
     description: 'List the available components'
+    required: false
     default: false
-  # todo add inputs
-  # path:
-  #   description: 'Location to install oneAPI'
-  #   required: false
-  #   default: /opt/intel/oneapi
-  # setvars:
-  #   description: 'Whether to configure the oneAPI environment'
-  #   required: false
-  #   default: true
 runs:
   using: 'node16'
   main: 'dist/main/index.js'
