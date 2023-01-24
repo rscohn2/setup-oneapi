@@ -37,8 +37,8 @@ const componentUrls = {
   ippcp: 'https://registrationcenter-download.intel.com/akdlm/irc_nas/18999/l_ippcp_oneapi_p_2021.6.2.15006_offline.sh',
   'ippcp@2021.6.2': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/18999/l_ippcp_oneapi_p_2021.6.2.15006_offline.sh',
 
-  mkl: 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19035/l_onednn_p_2022.2.1.16994_offline.sh',
-  'mkl@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19035/l_onednn_p_2022.2.1.16994_offline.sh',
+    mkl: 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19038/l_onemkl_p_2022.2.1.16993_offline.sh',
+  'mkl@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19038/l_onemkl_p_2022.2.1.16993_offline.sh',
 
   tbb: 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19041/l_tbb_oneapi_p_2021.7.1.15005_offline.sh',
   'tbb@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/irc_nas/19041/l_tbb_oneapi_p_2021.7.1.15005_offline.sh',
@@ -79,9 +79,10 @@ async function prune () {
   if (!core.getBooleanInput('prune')) { return }
 
   const dirs = ['/opt/intel/oneapi/compiler/latest/linux/compiler/lib/ia32_lin',
-    '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
-    '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
-    '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga']
+                '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
+                '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
+                '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga',
+                '/opt/intel/oneapi/mkl/latest/lib/intel64/*.a']
 
   console.log('Pruning oneapi install')
   await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
