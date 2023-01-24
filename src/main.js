@@ -79,9 +79,10 @@ async function prune () {
   if (!core.getBooleanInput('prune')) { return }
 
   const dirs = ['/opt/intel/oneapi/compiler/latest/linux/compiler/lib/ia32_lin',
-    '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
-    '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
-    '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga']
+                '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
+                '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
+                '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga',
+                '/opt/intel/oneapi/mkl/latest/lib/intel64/*.a']
 
   console.log('Pruning oneapi install')
   await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
