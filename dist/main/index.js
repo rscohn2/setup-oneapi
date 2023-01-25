@@ -63670,8 +63670,12 @@ function list () {
 function updateEnv () {
     // setvars.sh does not set CMAKE_PREFIX_PATH for MKL. It relies on
     // root install that puts links in /usr/local/lib/cmake?
-    core.exportVariable('CMAKE_PREFIX_PATH',
-                        '/opt/intel/oneapi/mkl/latest/lib/cmake/mkl:' + process.env['CMAKE_PREFIX_PATH'])
+    const name = 'CMAKE_PREFIX_PATH'
+    var val = '/opt/intel/oneapi/mkl/latest/lib/cmake/mkl'
+    if (name in process.env) {
+        val = val + ':' + process.env[name]
+    }
+    core.exportVariable(name, val)
 }
 
 async function run () {
