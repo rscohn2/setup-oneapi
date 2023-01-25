@@ -12,3 +12,4 @@ jobs:
     - name: Test install
       run: |
         source /opt/intel/oneapi/setvars.sh
+        printenv CMAKE_PREFIX_PATH
