@@ -3,11 +3,15 @@ enable_language(Fortran)
 
 project(setup-oneapi-tests)
 
+option(ENABLE_MKL "Enable MKL tests" OFF)
+option(ENABLE_COMPILERS "Enable Intel Compiler tests" OFF)
 
 include(CTest)
 
-find_package(MKL)
-find_package(MPI)
+if(ENABLE_MKL)
+  add_subdirectory(mkl)
+endif()
 
-add_subdirectory(mkl)
-add_subdirectory(compilers)
+if(ENABLE_COMPILERS)
+  add_subdirectory(compilers)
+endif()

@@ -25,10 +25,10 @@ jobs:
     - uses: ./
       with:
         components: mkl
-    - name: Test install
+    - name: Build/run
       run: |
-        cmake -B build test
-        make -C build/mkl all test
+        cmake -B build -DENABLE_MKL=on test
+        make -C build all test
 
   compilers:
     env:
@@ -45,7 +45,7 @@ jobs:
         components: |
           icx
           ifx
-    - name: Test install
+    - name: Build/run
       run: |
-        cmake -B build test
-        make -C build/compilers all test
+        cmake -B build -DENABLE_COMPILERS=on test
+        make -C build all test
