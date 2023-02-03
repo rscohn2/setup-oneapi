@@ -15,7 +15,7 @@ jobs:
     - name: Checks
       uses: pre-commit/action@v3.0.0
 
-  install:
+  mkl-install:
     runs-on: ubuntu-latest
     name: Install oneapi tools
     steps:
