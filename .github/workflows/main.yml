@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: ./
+    - name: Install
+      uses: ./
       with:
         components: mkl
     - name: Build/run
@@ -40,7 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: ./
+    - name: Install
+      uses: ./
       with:
         components: |
           icx
