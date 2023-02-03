@@ -31,13 +31,14 @@ Show the list of available components. Default `false`.
 Developer Info
 ==============
 
-Install ncc::
+Install dependencies::
 
   npm i -g @vercel/ncc
+  npm install
 
 Compile the package::
 
-  ncc build -o dist/main src/main.js
+  npm run build
 
 Commit changes and push.
 

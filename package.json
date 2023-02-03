@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "ncc build -o dist/main src/main.js && ncc build -o dist/cleanup src/cleanup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
