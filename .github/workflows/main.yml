@@ -42,7 +42,9 @@ jobs:
     - uses: actions/checkout@v3
     - uses: ./
       with:
-        components: icx
+        components: |
+          icx
+          ifx
     - name: Test install
       run: |
         cmake -B build test
