@@ -1,15 +1,53 @@
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
-  install:
+  checks:
     runs-on: ubuntu-latest
-    name: Install oneapi tools
     steps:
     - uses: actions/checkout@v3
-    - uses: ./
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Checks
+      uses: pre-commit/action@v3.0.0
+
+  mkl:
+    env:
+      # Manually set CPATH because MKL cmake support is broken
+      CPATH: /opt/intel/oneapi/mkl/latest/include
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install
+      uses: ./
       with:
         components: mkl
-    - name: Test install
+    - name: Build/run
       run: |
-        source /opt/intel/oneapi/setvars.sh
-        printenv CMAKE_PREFIX_PATH
+        cmake -B build -DENABLE_MKL=on test
+        make -C build all test
+
+  compilers:
+    env:
+      CC: /opt/intel/oneapi/compiler/latest/linux/bin/icx
+      CXX: /opt/intel/oneapi/compiler/latest/linux/bin/icpx
+      FC: /opt/intel/oneapi/compiler/latest/linux/bin/ifx
+      # fortran needs this because libimf does not have RPATH to find libintlc.so
+      LD_LIBRARY_PATH: /opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install
+      uses: ./
+      with:
+        components: |
+          icx
+          ifx
+    - name: Build/run
+      run: |
+        cmake -B build -DENABLE_COMPILERS=on test
+        make -C build all test

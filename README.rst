@@ -31,14 +31,30 @@ Show the list of available components. Default `false`.
 Developer Info
 ==============
 
-Install ncc::
+Install dependencies::
 
   npm i -g @vercel/ncc
-  
+  npm install
+
+Run checkers as part of pre-commit hook::
+
+  pip install pre-commit
+  pre-commit install
+
+You can also run checkers manually::
+
+  pre-commit run --all
+
+``pre-commit`` automatially fixes most errors. Add the changed files
+to your commit and try again.
+
 Compile the package::
 
-  ncc build -o dist/main src/main.js 
+  npm run build
 
 Commit changes and push.
 
+You can add test cases to: CI_.
+
+.. _CI: .github/workflows/main.yml
 .. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml
