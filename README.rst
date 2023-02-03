@@ -34,10 +34,10 @@ Developer Info
 Install ncc::
 
   npm i -g @vercel/ncc
-  
+
 Compile the package::
 
-  ncc build -o dist/main src/main.js 
+  ncc build -o dist/main src/main.js
 
 Commit changes and push.
 
