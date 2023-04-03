@@ -7,7 +7,9 @@ const exec = require('@actions/exec')
 const io = require('@actions/io')
 const tc = require('@actions/tool-cache')
 
-let key = 'v0'
+const glob = require('glob')
+
+let key = 'v1'
 
 const configs = {
   linux: {
@@ -96,7 +98,7 @@ async function restoreCache (components) {
 async function prune () {
   if (!core.getBooleanInput('prune')) { return }
 
-  const dirs = ['/opt/intel/oneapi/compiler/latest/linux/compiler/lib/ia32_lin',
+  const patterns = ['/opt/intel/oneapi/compiler/latest/linux/compiler/lib/ia32_lin',
     '/opt/intel/oneapi/compiler/latest/linux/bin/ia32',
     '/opt/intel/oneapi/compiler/latest/linux/lib/emu',
     '/opt/intel/oneapi/compiler/latest/linux/lib/oclfpga',
@@ -104,8 +106,13 @@ async function prune () {
 
   console.log('Pruning oneapi install')
   await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
-  // rmRF does not have root permission
-  await exec.exec('sudo', ['rm', '-rf'].concat(dirs))
+  for (const pattern of patterns) {
+    console.log(`  pattern: ${pattern}`)
+    for (const path of glob.globSync(pattern)) {
+      console.log(`    path: ${path}`)
+      await exec.exec('sudo', ['rm', '-r', path])
+    }
+  }
   await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
 }
 
