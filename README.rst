@@ -2,6 +2,10 @@
  setup-oneapi
 ==============
 
+
+.. image:: https://github.com/rscohn2/setup-oneapi/actions/workflows/main.yml/badge.svg
+   :target: https://github.com/rscohn2/setup-oneapi/actions/workflows/main.yml
+
 This GitHub action installs oneapi components. See example_.
 
 Inputs
