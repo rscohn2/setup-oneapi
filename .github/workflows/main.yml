@@ -58,7 +58,7 @@ jobs:
       run: |
         cd test/compilers
         mkdir build
-        ./test-mpi.sh
+        ./mpi-test.sh
 
   dal:
     runs-on: ubuntu-latest
