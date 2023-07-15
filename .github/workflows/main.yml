@@ -49,10 +49,16 @@ jobs:
         components: |
           icx
           ifx
+          impi
     - name: Build/run
       run: |
         cmake -B build -DENABLE_COMPILERS=on test
         make -C build all test
+    - name: Test mpi
+      run: |
+        cd test/compilers
+        mkdir build
+        ./mpi-test.sh
 
   dal:
     runs-on: ubuntu-latest
@@ -87,7 +93,6 @@ jobs:
           ccl
           dnn
           dpl
-          impi
           ippcp
           tbb
           vpl
