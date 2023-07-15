@@ -56,7 +56,7 @@ jobs:
         make -C build all test
     - name: Test mpi
       run: |
-        cd test/compiler
+        cd test/compilers
         mkdir build
         ./test-mpi.sh
 
