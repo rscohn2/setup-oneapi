@@ -95,6 +95,5 @@ jobs:
           dpl
           ippcp
           tbb
-          vpl
     - name: Test
       run: source /opt/intel/oneapi/setvars.sh
