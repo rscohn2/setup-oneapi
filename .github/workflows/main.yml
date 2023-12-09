@@ -27,6 +27,9 @@ jobs:
         components: mkl
     - name: Build/run
       run: |
+        # should not need to source setvars.sh
+        # try again for 2024.1
+        source /opt/intel/oneapi/setvars.sh
         cmake -B build -DENABLE_MKL=on test
         make -C build all test
 
