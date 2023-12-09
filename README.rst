@@ -35,9 +35,11 @@ Show the list of available components. Default `false`.
 Developer Info
 ==============
 
+Use nvm_ to install node.
+
 Install dependencies::
 
-  npm i -g @vercel/ncc
+  npm i @vercel/ncc
   npm install
 
 Run checkers as part of pre-commit hook::
@@ -49,7 +51,7 @@ You can also run checkers manually::
 
   pre-commit run --all
 
-``pre-commit`` automatially fixes most errors. Add the changed files
+``pre-commit`` automatically fixes most errors. Add the changed files
 to your commit and try again.
 
 Compile the package::
@@ -58,7 +60,10 @@ Compile the package::
 
 Commit changes and push.
 
+If CI passes, merge main branch into v0 branch.
+
 You can add test cases to: CI_.
 
 .. _CI: .github/workflows/main.yml
 .. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml
+.. _nvm: https://github.com/nvm-sh/nvm

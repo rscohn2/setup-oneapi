@@ -18,9 +18,6 @@ jobs:
       uses: pre-commit/action@v3.0.0
 
   mkl:
-    env:
-      # Manually set CPATH because MKL cmake support is broken
-      CPATH: /opt/intel/oneapi/mkl/latest/include
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -30,16 +27,19 @@ jobs:
         components: mkl
     - name: Build/run
       run: |
+        # should not need to source setvars.sh
+        # try again for 2024.1
+        source /opt/intel/oneapi/setvars.sh
         cmake -B build -DENABLE_MKL=on test
         make -C build all test
 
   compilers:
     env:
-      CC: /opt/intel/oneapi/compiler/latest/linux/bin/icx
-      CXX: /opt/intel/oneapi/compiler/latest/linux/bin/icpx
-      FC: /opt/intel/oneapi/compiler/latest/linux/bin/ifx
+      CC: /opt/intel/oneapi/compiler/latest/bin/icx
+      CXX: /opt/intel/oneapi/compiler/latest/bin/icpx
+      FC: /opt/intel/oneapi/compiler/latest/bin/ifx
       # fortran needs this because libimf does not have RPATH to find libintlc.so
-      LD_LIBRARY_PATH: /opt/intel/oneapi/compiler/latest/linux/compiler/lib/intel64_lin
+      LD_LIBRARY_PATH: /opt/intel/oneapi/compiler/latest/lib
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
