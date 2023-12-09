@@ -35,6 +35,8 @@ jobs:
       CC: /opt/intel/oneapi/compiler/latest/bin/icx
       CXX: /opt/intel/oneapi/compiler/latest/bin/icpx
       FC: /opt/intel/oneapi/compiler/latest/bin/ifx
+      # fortran needs this because libimf does not have RPATH to find libintlc.so
+      LD_LIBRARY_PATH: /opt/intel/oneapi/compiler/latest/lib
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
