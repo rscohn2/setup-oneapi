@@ -60,6 +60,8 @@ Compile the package::
 
 Commit changes and push.
 
+If CI passes, merge main branch into v0 branch.
+
 You can add test cases to: CI_.
 
 .. _CI: .github/workflows/main.yml
