@@ -92412,6 +92412,7 @@ var __webpack_exports__ = {};
 (() => {
 const path = __nccwpck_require__(1017)
 const process = __nccwpck_require__(7282)
+const fs = __nccwpck_require__(7147)
 
 const cache = __nccwpck_require__(9338)
 const core = __nccwpck_require__(4147)
@@ -92421,7 +92422,7 @@ const tc = __nccwpck_require__(580)
 
 const glob = __nccwpck_require__(4420)
 
-let key = 'v1'
+let key = 'v2'
 
 const configs = {
   linux: {
@@ -92520,6 +92521,33 @@ const configs = {
 
 const urls = configs.linux.urls
 
+function oneapiPrefix () {
+  // Tool cache persists between jobs
+  return path.join(process.env.RUNNER_TOOL_CACHE, 'setup-oneapi')
+}
+
+function componentVersion (component) {
+  const url = urls[component]
+  // Extract major.minor.patch
+  const match = url.match(/(\d+)\.(\d+)\.(\d+).\d+_offline.sh$/)
+  if (match) {
+    return [match[1], match[2], match[3]]
+  } else {
+    console.error(`Could not parse version from ${url}`)
+  }
+}
+
+function componentName (component) {
+  // strip off @, it it has one
+  return component.split('@')[0]
+}
+
+function componentInstalled (component) {
+  const [major, minor, patch] = componentVersion(component)
+  const root = path.join(oneapiPrefix(), componentName(component))
+  return fs.existsSync(path.join(root, `${major}.${minor}`)) || fs.existsSync(path.join(root, `${major}.${minor}.${patch}`))
+}
+
 async function restoreCache (components) {
   const useCache = core.getBooleanInput('cache')
   if (!useCache) return false
@@ -92535,7 +92563,7 @@ async function restoreCache (components) {
   console.log(`Key ${key}`)
 
   console.log('Restoring from cache')
-  const restoreKey = await cache.restoreCache(['/opt/intel/oneapi'], key)
+  const restoreKey = await cache.restoreCache([oneapiPrefix()], key)
 
   if (restoreKey) {
     console.log(`Restore succeeded: ${restoreKey}`)
@@ -92548,29 +92576,43 @@ async function restoreCache (components) {
   }
 }
 
+async function checkSpace () {
+  await exec.exec('du', ['-sh', oneapiPrefix()])
+}
+
 async function prune () {
   if (!core.getBooleanInput('prune')) { return }
-
-  const patterns = ['/opt/intel/oneapi/compiler/latest/opt/oclfpga',
-    '/opt/intel/oneapi/mkl/latest/lib/*.a']
-
   console.log('Pruning oneapi install')
-  await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
+
+  checkSpace()
+  const patterns = ['compiler/latest/opt/oclfpga',
+    'mkl/latest/lib/*.a']
   for (const pattern of patterns) {
-    console.log(`  pattern: ${pattern}`)
-    for (const path of glob.globSync(pattern)) {
+    const expression = path.join(oneapiPrefix(), pattern)
+    console.log(`  expression: ${expression}`)
+    for (const path of glob.globSync(expression)) {
       console.log(`    path: ${path}`)
-      await exec.exec('sudo', ['rm', '-r', path])
+      io.rmRF(path)
+      checkSpace()
     }
   }
-  await exec.exec('du', ['-sh', '/opt/intel/oneapi'])
 }
 
 async function install (component) {
   const url = urls[component]
+  if (componentInstalled(component)) {
+    console.log(`Component ${component} already installed`)
+    return
+  }
+
   console.log(`Installing ${component} from ${url}`)
   const installerPath = await tc.downloadTool(url)
-  await exec.exec('sudo', ['bash', installerPath, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept'])
+  // set  HOME env variable to oneapiPrefix so that installer does not
+  // try to write to runner's home directory
+  process.env.HOME = oneapiPrefix()
+  await exec.exec('bash', [installerPath, '-s', '-a', '-s', '--action', 'install', '--eula', 'accept',
+    '--instance', 'setup-oneapi', '--install-dir', oneapiPrefix()])
+  // File is big so do not wait for post action to delete it
   await io.rmRF(installerPath)
   await prune()
 }
@@ -92593,11 +92635,12 @@ function updateEnv () {
   // setvars.sh does not set CMAKE_PREFIX_PATH for MKL. It relies on
   // root install that puts links in /usr/local/lib/cmake?
   const name = 'CMAKE_PREFIX_PATH'
-  let val = '/opt/intel/oneapi/mkl/latest/lib/cmake/mkl'
+  let val = path.join(oneapiPrefix(), 'mkl', 'latest', 'lib', 'cmake', 'mkl')
   if (name in process.env) {
     val = val + ':' + process.env[name]
   }
   core.exportVariable(name, val)
+  core.setOutput('root', oneapiPrefix())
 }
 
 async function run () {
@@ -92617,6 +92660,15 @@ async function run () {
 }
 
 run()
+
+function test () {
+
+}
+
+// only execute if invoked from command line
+if (require.main === require.cache[eval('__filename')]) {
+  test()
+}
 
 })();
 
