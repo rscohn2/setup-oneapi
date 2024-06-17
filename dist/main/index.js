@@ -92576,15 +92576,10 @@ async function restoreCache (components) {
   }
 }
 
-async function checkSpace () {
-  await exec.exec('du', ['-sh', oneapiPrefix()])
-}
-
 async function prune () {
   if (!core.getBooleanInput('prune')) { return }
   console.log('Pruning oneapi install')
 
-  checkSpace()
   const patterns = ['compiler/latest/opt/oclfpga',
     'mkl/latest/lib/*.a']
   for (const pattern of patterns) {
@@ -92593,7 +92588,6 @@ async function prune () {
     for (const path of glob.globSync(expression)) {
       console.log(`    path: ${path}`)
       io.rmRF(path)
-      checkSpace()
     }
   }
 }
