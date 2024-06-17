@@ -22,6 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install
+      id: install
       uses: ./
       with:
         components: mkl
@@ -29,22 +30,17 @@ jobs:
       run: |
         # should not need to source setvars.sh
         # try again for 2024.1
-        source /opt/intel/oneapi/setvars.sh
+        source ${{ steps.install.outputs.root }}/setvars.sh
         cmake -B build -DENABLE_MKL=on test
         make -C build all test
 
   compilers:
-    env:
-      CC: /opt/intel/oneapi/compiler/latest/bin/icx
-      CXX: /opt/intel/oneapi/compiler/latest/bin/icpx
-      FC: /opt/intel/oneapi/compiler/latest/bin/ifx
-      # fortran needs this because libimf does not have RPATH to find libintlc.so
-      LD_LIBRARY_PATH: /opt/intel/oneapi/compiler/latest/lib
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Install
       uses: ./
+      id: install
       with:
         components: |
           icx
@@ -52,10 +48,12 @@ jobs:
           impi
     - name: Build/run
       run: |
-        cmake -B build -DENABLE_COMPILERS=on test
+        source ${{ steps.install.outputs.root }}/setvars.sh
+        CC=icx CXX=icpx FC=ifx cmake -B build -DENABLE_COMPILERS=on test
         make -C build all test
     - name: Test mpi
       run: |
+        source ${{ steps.install.outputs.root }}/setvars.sh
         cd test/compilers
         mkdir build
         ./mpi-test.sh
@@ -66,10 +64,11 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       uses: ./
+      id: install
       with:
         components: dal
     - name: Test
-      run: source /opt/intel/oneapi/setvars.sh
+      run: source ${{ steps.install.outputs.root }}/setvars.sh
 
   ipp:
     runs-on: ubuntu-latest
@@ -77,10 +76,11 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       uses: ./
+      id: install
       with:
         components: ipp
     - name: Test
-      run: source /opt/intel/oneapi/setvars.sh
+      run: source ${{ steps.install.outputs.root }}/setvars.sh
 
   rest:
     runs-on: ubuntu-latest
@@ -88,6 +88,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       uses: ./
+      id: install
       with:
         components: |
           ccl
@@ -96,4 +97,4 @@ jobs:
           ippcp
           tbb
     - name: Test
-      run: source /opt/intel/oneapi/setvars.sh
+      run: source ${{ steps.install.outputs.root }}/setvars.sh

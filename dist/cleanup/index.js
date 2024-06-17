@@ -83402,6 +83402,12 @@ var __webpack_exports__ = {};
 (() => {
 const cache = __nccwpck_require__(9338)
 const core = __nccwpck_require__(4147)
+const path = __nccwpck_require__(1017)
+
+function oneapiPrefix () {
+  // Tool cache persists between jobs
+  return path.join(process.env.RUNNER_TOOL_CACHE, 'setup-oneapi')
+}
 
 async function saveCache () {
   const useCache = core.getInput('cache')
@@ -83410,7 +83416,7 @@ async function saveCache () {
   if (!useCache || key === '') return
 
   console.log(`Saving install with key ${key}`)
-  await cache.saveCache(['/opt/intel/oneapi'], key)
+  await cache.saveCache([oneapiPrefix()], key)
 }
 
 try {

@@ -16,6 +16,9 @@ inputs:
   list:
     description: 'List the available components'
     default: false
+outputs:
+  root:
+    description: 'Root directory of the installed components'
 runs:
   using: 'node20'
   main: 'dist/main/index.js'
