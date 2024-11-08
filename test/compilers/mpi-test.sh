@@ -11,11 +11,10 @@ echo -n "mpiifort? "
 echo $(which mpiifort)
 echo -n "gfortran? "
 echo $(which gfortran)
-echo -n "ifort?    "
-echo $(which ifort)
 echo -n "ifx?      "
 echo $(which ifx)
 
-mpiifort mpiifort-test.f90 -o build/mpiifort-test
+mpiifort -fc=ifx mpiifort-test.f90 -o build/mpiifort-test
+# or use mpiifx
 
 mpirun -np 2 build/mpiifort-test
