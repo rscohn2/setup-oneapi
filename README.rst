@@ -59,8 +59,33 @@ You can also run checkers manually::
 to your commit and try again.
 
 To publish a new oneapi release, update src/main.js. Get the URLS from
-`spack mkl package`_ and similar for the other packages. icx/ifx are
-in intel-oneapi-compilers package.
+the corresponding spack packages.
+
+.. list-table::
+   :header-rows: 1
+
+   * - update src/main.js
+     - spack package
+   * - ccl
+     - `intel-onepi-ccl`_
+   * - dal
+     - `intel-onepi-dal`_
+   * - dnn
+     - `intel-onepi-dnn`_
+   * - dpl
+     - `intel-onepi-dpl`_
+   * - icx/ifx
+     - `intel-onepi-compilers`_
+   * - impi
+     - `intel-onepi-mpi`_
+   * - ipp
+     - `intel-onepi-ipp`_
+   * - ippcp
+     - `intel-onepi-ippcp`_
+   * - mkl
+     - `intel-onepi-mkl`_
+   * - tbb
+     - `intel-onepi-tbb`_
 
 Compile the package::
 
@@ -72,7 +97,17 @@ If CI passes, merge main branch into v0 branch.
 
 You can add test cases to: CI_.
 
-.. _`spack mkl package`: https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-mkl/package.py
+.. _`intel-onepi-ccl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ccl/package.py
+.. _`intel-onepi-compilers`: https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-compilers/package.py
+.. _`intel-onepi-dal`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dal/package.py
+.. _`intel-onepi-dnn`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dnn/package.py
+.. _`intel-onepi-dpl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dpl/package.py
+.. _`intel-onepi-ipp`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ipp/package.py
+.. _`intel-onepi-ippcp`:     https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ippcp/package.py
+.. _`intel-onepi-mkl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-mkl/package.py
+.. _`intel-onepi-mpi`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-mpi/package.py
+.. _`intel-onepi-tbb`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-tbb/package.py
+
 .. _CI: .github/workflows/main.yml
 .. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml
 .. _nvm: https://github.com/nvm-sh/nvm
