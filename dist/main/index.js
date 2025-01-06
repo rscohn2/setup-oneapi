@@ -7257,8 +7257,8 @@ class BaseRequestPolicy {
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const SDK_VERSION = "12.25.0";
-const SERVICE_VERSION = "2024-11-04";
+const SDK_VERSION = "12.26.0";
+const SERVICE_VERSION = "2025-01-05";
 const BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES = 256 * 1024 * 1024; // 256MB
 const BLOCK_BLOB_MAX_STAGE_BLOCK_BYTES = 4000 * 1024 * 1024; // 4000MB
 const BLOCK_BLOB_MAX_BLOCKS = 50000;
@@ -17920,7 +17920,7 @@ const timeoutInSeconds = {
 const version = {
     parameterPath: "version",
     mapper: {
-        defaultValue: "2024-11-04",
+        defaultValue: "2025-01-05",
         isConstant: true,
         serializedName: "x-ms-version",
         type: {
@@ -20918,7 +20918,12 @@ const setImmutabilityPolicyOperationSpec = {
             headersMapper: BlobSetImmutabilityPolicyExceptionHeaders,
         },
     },
-    queryParameters: [timeoutInSeconds, comp12],
+    queryParameters: [
+        timeoutInSeconds,
+        snapshot,
+        versionId,
+        comp12,
+    ],
     urlParameters: [url],
     headerParameters: [
         version,
@@ -20943,7 +20948,12 @@ const deleteImmutabilityPolicyOperationSpec = {
             headersMapper: BlobDeleteImmutabilityPolicyExceptionHeaders,
         },
     },
-    queryParameters: [timeoutInSeconds, comp12],
+    queryParameters: [
+        timeoutInSeconds,
+        snapshot,
+        versionId,
+        comp12,
+    ],
     urlParameters: [url],
     headerParameters: [
         version,
@@ -20965,7 +20975,12 @@ const setLegalHoldOperationSpec = {
             headersMapper: BlobSetLegalHoldExceptionHeaders,
         },
     },
-    queryParameters: [timeoutInSeconds, comp13],
+    queryParameters: [
+        timeoutInSeconds,
+        snapshot,
+        versionId,
+        comp13,
+    ],
     urlParameters: [url],
     headerParameters: [
         version,
@@ -22537,7 +22552,7 @@ let StorageClient$1 = class StorageClient extends coreHttpCompat__namespace.Exte
         const defaults = {
             requestContentType: "application/json; charset=utf-8",
         };
-        const packageDetails = `azsdk-js-azure-storage-blob/12.25.0`;
+        const packageDetails = `azsdk-js-azure-storage-blob/12.26.0`;
         const userAgentPrefix = options.userAgentOptions && options.userAgentOptions.userAgentPrefix
             ? `${options.userAgentOptions.userAgentPrefix} ${packageDetails}`
             : `${packageDetails}`;
@@ -22548,7 +22563,7 @@ let StorageClient$1 = class StorageClient extends coreHttpCompat__namespace.Exte
         // Parameter assignments
         this.url = url;
         // Assigning values to Constant parameters
-        this.version = options.version || "2024-11-04";
+        this.version = options.version || "2025-01-05";
         this.service = new ServiceImpl(this);
         this.container = new ContainerImpl(this);
         this.blob = new BlobImpl(this);
@@ -24839,7 +24854,7 @@ class AvroType {
             return AvroType.fromStringSchema(type);
         }
         catch (_a) {
-            // eslint-disable-line no-empty
+            // no-op
         }
         switch (type) {
             case AvroComplex.RECORD:
@@ -24966,7 +24981,6 @@ class AvroRecordType extends AvroType {
 function arraysEqual(a, b) {
     if (a === b)
         return true;
-    // eslint-disable-next-line eqeqeq
     if (a == null || b == null)
         return false;
     if (a.length !== b.length)
@@ -27493,6 +27507,38 @@ class BlobClient extends StorageClient {
             throw new RangeError("Can only generate the SAS when the client is initialized with a shared key credential");
         }
         return generateBlobSASQueryParametersInternal(Object.assign({ containerName: this._containerName, blobName: this._name, snapshotTime: this._snapshot, versionId: this._versionId }, options), this.credential).stringToSign;
+    }
+    /**
+     *
+     * Generates a Blob Service Shared Access Signature (SAS) URI based on
+     * the client properties and parameters passed in. The SAS is signed by the input user delegation key.
+     *
+     * @see https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
+     *
+     * @param options - Optional parameters.
+     * @param userDelegationKey -  Return value of `blobServiceClient.getUserDelegationKey()`
+     * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
+     */
+    generateUserDelegationSasUrl(options, userDelegationKey) {
+        return new Promise((resolve) => {
+            const sas = generateBlobSASQueryParameters(Object.assign({ containerName: this._containerName, blobName: this._name, snapshotTime: this._snapshot, versionId: this._versionId }, options), userDelegationKey, this.accountName).toString();
+            resolve(appendToURLQuery(this.url, sas));
+        });
+    }
+    /**
+     * Only available for BlobClient constructed with a shared key credential.
+     *
+     * Generates string to sign for a Blob Service Shared Access Signature (SAS) URI based on
+     * the client properties and parameters passed in. The SAS is signed by the input user delegation key.
+     *
+     * @see https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
+     *
+     * @param options - Optional parameters.
+     * @param userDelegationKey -  Return value of `blobServiceClient.getUserDelegationKey()`
+     * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
+     */
+    generateUserDelegationSasStringToSign(options, userDelegationKey) {
+        return generateBlobSASQueryParametersInternal(Object.assign({ containerName: this._containerName, blobName: this._name, snapshotTime: this._snapshot, versionId: this._versionId }, options), userDelegationKey, this.accountName).stringToSign;
     }
     /**
      * Delete the immutablility policy on the blob.
@@ -30859,6 +30905,35 @@ class ContainerClient extends StorageClient {
         return generateBlobSASQueryParametersInternal(Object.assign({ containerName: this._containerName }, options), this.credential).stringToSign;
     }
     /**
+     * Generates a Blob Container Service Shared Access Signature (SAS) URI based on the client properties
+     * and parameters passed in. The SAS is signed by the input user delegation key.
+     *
+     * @see https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
+     *
+     * @param options - Optional parameters.
+     * @param userDelegationKey -  Return value of `blobServiceClient.getUserDelegationKey()`
+     * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
+     */
+    generateUserDelegationSasUrl(options, userDelegationKey) {
+        return new Promise((resolve) => {
+            const sas = generateBlobSASQueryParameters(Object.assign({ containerName: this._containerName }, options), userDelegationKey, this.accountName).toString();
+            resolve(appendToURLQuery(this.url, sas));
+        });
+    }
+    /**
+     * Generates string to sign for a Blob Container Service Shared Access Signature (SAS) URI
+     * based on the client properties and parameters passed in. The SAS is signed by the input user delegation key.
+     *
+     * @see https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
+     *
+     * @param options - Optional parameters.
+     * @param userDelegationKey -  Return value of `blobServiceClient.getUserDelegationKey()`
+     * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
+     */
+    generateUserDelegationSasStringToSign(options, userDelegationKey) {
+        return generateBlobSASQueryParametersInternal(Object.assign({ containerName: this._containerName }, options), userDelegationKey, this.accountName).stringToSign;
+    }
+    /**
      * Creates a BlobBatchClient object to conduct batch operations.
      *
      * @see https://docs.microsoft.com/en-us/rest/api/storageservices/blob-batch
@@ -32305,8 +32380,13 @@ class Agent extends http.Agent {
             .then((socket) => {
             this.decrementSockets(name, fakeSocket);
             if (socket instanceof http.Agent) {
-                // @ts-expect-error `addRequest()` isn't defined in `@types/node`
-                return socket.addRequest(req, connectOpts);
+                try {
+                    // @ts-expect-error `addRequest()` isn't defined in `@types/node`
+                    return socket.addRequest(req, connectOpts);
+                }
+                catch (err) {
+                    return cb(err);
+                }
             }
             this[INTERNAL].currentSocket = socket;
             // @ts-expect-error `createSocket()` isn't defined in `@types/node`
@@ -32780,6 +32860,7 @@ function useColors() {
 
 	// Is webkit? http://stackoverflow.com/a/16459606/376773
 	// document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+	// eslint-disable-next-line no-return-assign
 	return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
 		// Is firebug? http://stackoverflow.com/a/398120/376773
 		(typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
@@ -33095,24 +33176,62 @@ function setup(env) {
 		createDebug.names = [];
 		createDebug.skips = [];
 
-		let i;
-		const split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
-		const len = split.length;
+		const split = (typeof namespaces === 'string' ? namespaces : '')
+			.trim()
+			.replace(' ', ',')
+			.split(',')
+			.filter(Boolean);
 
-		for (i = 0; i < len; i++) {
-			if (!split[i]) {
-				// ignore empty strings
-				continue;
-			}
-
-			namespaces = split[i].replace(/\*/g, '.*?');
-
-			if (namespaces[0] === '-') {
-				createDebug.skips.push(new RegExp('^' + namespaces.slice(1) + '$'));
+		for (const ns of split) {
+			if (ns[0] === '-') {
+				createDebug.skips.push(ns.slice(1));
 			} else {
-				createDebug.names.push(new RegExp('^' + namespaces + '$'));
+				createDebug.names.push(ns);
 			}
 		}
+	}
+
+	/**
+	 * Checks if the given string matches a namespace template, honoring
+	 * asterisks as wildcards.
+	 *
+	 * @param {String} search
+	 * @param {String} template
+	 * @return {Boolean}
+	 */
+	function matchesTemplate(search, template) {
+		let searchIndex = 0;
+		let templateIndex = 0;
+		let starIndex = -1;
+		let matchIndex = 0;
+
+		while (searchIndex < search.length) {
+			if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === '*')) {
+				// Match character or proceed with wildcard
+				if (template[templateIndex] === '*') {
+					starIndex = templateIndex;
+					matchIndex = searchIndex;
+					templateIndex++; // Skip the '*'
+				} else {
+					searchIndex++;
+					templateIndex++;
+				}
+			} else if (starIndex !== -1) { // eslint-disable-line no-negated-condition
+				// Backtrack to the last '*' and try to match more characters
+				templateIndex = starIndex + 1;
+				matchIndex++;
+				searchIndex = matchIndex;
+			} else {
+				return false; // No match
+			}
+		}
+
+		// Handle trailing '*' in template
+		while (templateIndex < template.length && template[templateIndex] === '*') {
+			templateIndex++;
+		}
+
+		return templateIndex === template.length;
 	}
 
 	/**
@@ -33123,8 +33242,8 @@ function setup(env) {
 	*/
 	function disable() {
 		const namespaces = [
-			...createDebug.names.map(toNamespace),
-			...createDebug.skips.map(toNamespace).map(namespace => '-' + namespace)
+			...createDebug.names,
+			...createDebug.skips.map(namespace => '-' + namespace)
 		].join(',');
 		createDebug.enable('');
 		return namespaces;
@@ -33138,39 +33257,19 @@ function setup(env) {
 	* @api public
 	*/
 	function enabled(name) {
-		if (name[name.length - 1] === '*') {
-			return true;
-		}
-
-		let i;
-		let len;
-
-		for (i = 0, len = createDebug.skips.length; i < len; i++) {
-			if (createDebug.skips[i].test(name)) {
+		for (const skip of createDebug.skips) {
+			if (matchesTemplate(name, skip)) {
 				return false;
 			}
 		}
 
-		for (i = 0, len = createDebug.names.length; i < len; i++) {
-			if (createDebug.names[i].test(name)) {
+		for (const ns of createDebug.names) {
+			if (matchesTemplate(name, ns)) {
 				return true;
 			}
 		}
 
 		return false;
-	}
-
-	/**
-	* Convert regexp to namespace
-	*
-	* @param {RegExp} regxep
-	* @return {String} namespace
-	* @api private
-	*/
-	function toNamespace(regexp) {
-		return regexp.toString()
-			.substring(2, regexp.toString().length - 2)
-			.replace(/\.\*\?$/, '*');
 	}
 
 	/**
@@ -34507,6 +34606,7 @@ function readDocType(xmlData, i){
             if (xmlData[i] === '<' && !comment) { //Determine the tag type
                 if( hasBody && isEntity(xmlData, i)){
                     i += 7; 
+                    let entityName, val;
                     [entityName, val,i] = readEntityExp(xmlData,i+1);
                     if(val.indexOf("&") === -1) //Parameter entities are not supported
                         entities[ validateEntityName(entityName) ] = {
@@ -35933,6 +36033,17 @@ const agent_base_1 = __nccwpck_require__(8894);
 const url_1 = __nccwpck_require__(7016);
 const parse_proxy_response_1 = __nccwpck_require__(7943);
 const debug = (0, debug_1.default)('https-proxy-agent');
+const setServernameFromNonIpHost = (options) => {
+    if (options.servername === undefined &&
+        options.host &&
+        !net.isIP(options.host)) {
+        return {
+            ...options,
+            servername: options.host,
+        };
+    }
+    return options;
+};
 /**
  * The `HttpsProxyAgent` implements an HTTP Agent subclass that connects to
  * the specified "HTTP(s) proxy server" in order to proxy HTTPS requests.
@@ -35980,11 +36091,7 @@ class HttpsProxyAgent extends agent_base_1.Agent {
         let socket;
         if (proxy.protocol === 'https:') {
             debug('Creating `tls.Socket`: %o', this.connectOpts);
-            const servername = this.connectOpts.servername || this.connectOpts.host;
-            socket = tls.connect({
-                ...this.connectOpts,
-                servername,
-            });
+            socket = tls.connect(setServernameFromNonIpHost(this.connectOpts));
         }
         else {
             debug('Creating `net.Socket`: %o', this.connectOpts);
@@ -36020,11 +36127,9 @@ class HttpsProxyAgent extends agent_base_1.Agent {
                 // The proxy is connecting to a TLS server, so upgrade
                 // this socket connection to a TLS connection.
                 debug('Upgrading socket connection to TLS');
-                const servername = opts.servername || opts.host;
                 return tls.connect({
-                    ...omit(opts, 'host', 'path', 'port'),
+                    ...omit(setServernameFromNonIpHost(opts), 'host', 'path', 'port'),
                     socket,
-                    servername,
                 });
             }
             return socket;
@@ -66967,7 +67072,7 @@ exports.buildCreatePoller = buildCreatePoller;
 // Licensed under the MIT License.
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DEFAULT_RETRY_POLICY_COUNT = exports.SDK_VERSION = void 0;
-exports.SDK_VERSION = "1.17.0";
+exports.SDK_VERSION = "1.18.1";
 exports.DEFAULT_RETRY_POLICY_COUNT = 3;
 //# sourceMappingURL=constants.js.map
 
@@ -67272,6 +67377,9 @@ function isReadableStream(body) {
     return body && typeof body.pipe === "function";
 }
 function isStreamComplete(stream) {
+    if (stream.readable === false) {
+        return Promise.resolve();
+    }
     return new Promise((resolve) => {
         const handler = () => {
             resolve();
@@ -68000,20 +68108,46 @@ function auxiliaryAuthenticationHeaderPolicy(options) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.bearerTokenAuthenticationPolicyName = void 0;
 exports.bearerTokenAuthenticationPolicy = bearerTokenAuthenticationPolicy;
+exports.parseChallenges = parseChallenges;
 const tokenCycler_js_1 = __nccwpck_require__(9202);
 const log_js_1 = __nccwpck_require__(544);
+const restError_js_1 = __nccwpck_require__(8666);
 /**
  * The programmatic identifier of the bearerTokenAuthenticationPolicy.
  */
 exports.bearerTokenAuthenticationPolicyName = "bearerTokenAuthenticationPolicy";
 /**
+ * Try to send the given request.
+ *
+ * When a response is received, returns a tuple of the response received and, if the response was received
+ * inside a thrown RestError, the RestError that was thrown.
+ *
+ * Otherwise, if an error was thrown while sending the request that did not provide an underlying response, it
+ * will be rethrown.
+ */
+async function trySendRequest(request, next) {
+    try {
+        return [await next(request), undefined];
+    }
+    catch (e) {
+        if ((0, restError_js_1.isRestError)(e) && e.response) {
+            return [e.response, e];
+        }
+        else {
+            throw e;
+        }
+    }
+}
+/**
  * Default authorize request handler
  */
 async function defaultAuthorizeRequest(options) {
     const { scopes, getAccessToken, request } = options;
+    // Enable CAE true by default
     const getTokenOptions = {
         abortSignal: request.abortSignal,
         tracingOptions: request.tracingOptions,
+        enableCae: true,
     };
     const accessToken = await getAccessToken(scopes, getTokenOptions);
     if (accessToken) {
@@ -68024,22 +68158,39 @@ async function defaultAuthorizeRequest(options) {
  * We will retrieve the challenge only if the response status code was 401,
  * and if the response contained the header "WWW-Authenticate" with a non-empty value.
  */
-function getChallenge(response) {
-    const challenge = response.headers.get("WWW-Authenticate");
-    if (response.status === 401 && challenge) {
-        return challenge;
+function isChallengeResponse(response) {
+    return response.status === 401 && response.headers.has("WWW-Authenticate");
+}
+/**
+ * Re-authorize the request for CAE challenge.
+ * The response containing the challenge is `options.response`.
+ * If this method returns true, the underlying request will be sent once again.
+ */
+async function authorizeRequestOnCaeChallenge(onChallengeOptions, caeClaims) {
+    var _a;
+    const { scopes } = onChallengeOptions;
+    const accessToken = await onChallengeOptions.getAccessToken(scopes, {
+        enableCae: true,
+        claims: caeClaims,
+    });
+    if (!accessToken) {
+        return false;
     }
-    return;
+    onChallengeOptions.request.headers.set("Authorization", `${(_a = accessToken.tokenType) !== null && _a !== void 0 ? _a : "Bearer"} ${accessToken.token}`);
+    return true;
 }
 /**
  * A policy that can request a token from a TokenCredential implementation and
  * then apply it to the Authorization header of a request as a Bearer token.
  */
 function bearerTokenAuthenticationPolicy(options) {
-    var _a;
+    var _a, _b, _c;
     const { credential, scopes, challengeCallbacks } = options;
     const logger = options.logger || log_js_1.logger;
-    const callbacks = Object.assign({ authorizeRequest: (_a = challengeCallbacks === null || challengeCallbacks === void 0 ? void 0 : challengeCallbacks.authorizeRequest) !== null && _a !== void 0 ? _a : defaultAuthorizeRequest, authorizeRequestOnChallenge: challengeCallbacks === null || challengeCallbacks === void 0 ? void 0 : challengeCallbacks.authorizeRequestOnChallenge }, challengeCallbacks);
+    const callbacks = {
+        authorizeRequest: (_b = (_a = challengeCallbacks === null || challengeCallbacks === void 0 ? void 0 : challengeCallbacks.authorizeRequest) === null || _a === void 0 ? void 0 : _a.bind(challengeCallbacks)) !== null && _b !== void 0 ? _b : defaultAuthorizeRequest,
+        authorizeRequestOnChallenge: (_c = challengeCallbacks === null || challengeCallbacks === void 0 ? void 0 : challengeCallbacks.authorizeRequestOnChallenge) === null || _c === void 0 ? void 0 : _c.bind(challengeCallbacks),
+    };
     // This function encapsulates the entire process of reliably retrieving the token
     // The options are left out of the public API until there's demand to configure this.
     // Remember to extend `BearerTokenAuthenticationPolicyOptions` with `TokenCyclerOptions`
@@ -68074,26 +68225,71 @@ function bearerTokenAuthenticationPolicy(options) {
             });
             let response;
             let error;
-            try {
-                response = await next(request);
-            }
-            catch (err) {
-                error = err;
-                response = err.response;
-            }
-            if (callbacks.authorizeRequestOnChallenge &&
-                (response === null || response === void 0 ? void 0 : response.status) === 401 &&
-                getChallenge(response)) {
-                // processes challenge
-                const shouldSendRequest = await callbacks.authorizeRequestOnChallenge({
-                    scopes: Array.isArray(scopes) ? scopes : [scopes],
-                    request,
-                    response,
-                    getAccessToken,
-                    logger,
-                });
-                if (shouldSendRequest) {
-                    return next(request);
+            let shouldSendRequest;
+            [response, error] = await trySendRequest(request, next);
+            if (isChallengeResponse(response)) {
+                let claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate"));
+                // Handle CAE by default when receive CAE claim
+                if (claims) {
+                    let parsedClaim;
+                    // Return the response immediately if claims is not a valid base64 encoded string
+                    try {
+                        parsedClaim = atob(claims);
+                    }
+                    catch (e) {
+                        logger.warning(`The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${claims}`);
+                        return response;
+                    }
+                    shouldSendRequest = await authorizeRequestOnCaeChallenge({
+                        scopes: Array.isArray(scopes) ? scopes : [scopes],
+                        response,
+                        request,
+                        getAccessToken,
+                        logger,
+                    }, parsedClaim);
+                    // Send updated request and handle response for RestError
+                    if (shouldSendRequest) {
+                        [response, error] = await trySendRequest(request, next);
+                    }
+                }
+                else if (callbacks.authorizeRequestOnChallenge) {
+                    // Handle custom challenges when client provides custom callback
+                    shouldSendRequest = await callbacks.authorizeRequestOnChallenge({
+                        scopes: Array.isArray(scopes) ? scopes : [scopes],
+                        request,
+                        response,
+                        getAccessToken,
+                        logger,
+                    });
+                    // Send updated request and handle response for RestError
+                    if (shouldSendRequest) {
+                        [response, error] = await trySendRequest(request, next);
+                    }
+                    // If we get another CAE Claim, we will handle it by default and return whatever value we receive for this
+                    if (isChallengeResponse(response)) {
+                        claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate"));
+                        if (claims) {
+                            let parsedClaim;
+                            try {
+                                parsedClaim = atob(claims);
+                            }
+                            catch (e) {
+                                logger.warning(`The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${claims}`);
+                                return response;
+                            }
+                            shouldSendRequest = await authorizeRequestOnCaeChallenge({
+                                scopes: Array.isArray(scopes) ? scopes : [scopes],
+                                response,
+                                request,
+                                getAccessToken,
+                                logger,
+                            }, parsedClaim);
+                            // Send updated request and handle response for RestError
+                            if (shouldSendRequest) {
+                                [response, error] = await trySendRequest(request, next);
+                            }
+                        }
+                    }
                 }
             }
             if (error) {
@@ -68104,6 +68300,49 @@ function bearerTokenAuthenticationPolicy(options) {
             }
         },
     };
+}
+/**
+ * Converts: `Bearer a="b", c="d", Pop e="f", g="h"`.
+ * Into: `[ { scheme: 'Bearer', params: { a: 'b', c: 'd' } }, { scheme: 'Pop', params: { e: 'f', g: 'h' } } ]`.
+ *
+ * @internal
+ */
+function parseChallenges(challenges) {
+    // Challenge regex seperates the string to individual challenges with different schemes in the format `Scheme a="b", c=d`
+    // The challenge regex captures parameteres with either quotes values or unquoted values
+    const challengeRegex = /(\w+)\s+((?:\w+=(?:"[^"]*"|[^,]*),?\s*)+)/g;
+    // Parameter regex captures the claims group removed from the scheme in the format `a="b"` and `c="d"`
+    // CAE challenge always have quoted parameters. For more reference, https://learn.microsoft.com/entra/identity-platform/claims-challenge
+    const paramRegex = /(\w+)="([^"]*)"/g;
+    const parsedChallenges = [];
+    let match;
+    // Iterate over each challenge match
+    while ((match = challengeRegex.exec(challenges)) !== null) {
+        const scheme = match[1];
+        const paramsString = match[2];
+        const params = {};
+        let paramMatch;
+        // Iterate over each parameter match
+        while ((paramMatch = paramRegex.exec(paramsString)) !== null) {
+            params[paramMatch[1]] = paramMatch[2];
+        }
+        parsedChallenges.push({ scheme, params });
+    }
+    return parsedChallenges;
+}
+/**
+ * Parse a pipeline response and look for a CAE challenge with "Bearer" scheme
+ * Return the value in the header without parsing the challenge
+ * @internal
+ */
+function getCaeChallengeClaims(challenges) {
+    var _a;
+    if (!challenges) {
+        return;
+    }
+    // Find all challenges present in the header
+    const parsedChallenges = parseChallenges(challenges);
+    return (_a = parsedChallenges.find((x) => x.scheme === "Bearer" && x.params.claims && x.params.error === "insufficient_claims")) === null || _a === void 0 ? void 0 : _a.params.claims;
 }
 //# sourceMappingURL=bearerTokenAuthenticationPolicy.js.map
 
@@ -69318,7 +69557,6 @@ function exponentialRetryStrategy(options = {}) {
     var _a, _b;
     const retryInterval = (_a = options.retryDelayInMs) !== null && _a !== void 0 ? _a : DEFAULT_CLIENT_RETRY_INTERVAL;
     const maxRetryInterval = (_b = options.maxRetryDelayInMs) !== null && _b !== void 0 ? _b : DEFAULT_CLIENT_MAX_RETRY_INTERVAL;
-    let retryAfterInMs = retryInterval;
     return {
         name: "exponentialRetryStrategy",
         retry({ retryCount, response, responseError }) {
@@ -69333,15 +69571,10 @@ function exponentialRetryStrategy(options = {}) {
             if (responseError && !matchedSystemError && !isExponential) {
                 return { errorToThrow: responseError };
             }
-            // Exponentially increase the delay each time
-            const exponentialDelay = retryAfterInMs * Math.pow(2, retryCount);
-            // Don't let the delay exceed the maximum
-            const clampedExponentialDelay = Math.min(maxRetryInterval, exponentialDelay);
-            // Allow the final value to have some "jitter" (within 50% of the delay size) so
-            // that retries across multiple clients don't occur simultaneously.
-            retryAfterInMs =
-                clampedExponentialDelay / 2 + (0, core_util_1.getRandomIntegerInclusive)(0, clampedExponentialDelay / 2);
-            return { retryAfterInMs };
+            return (0, core_util_1.calculateRetryDelay)(retryCount, {
+                retryDelayInMs: retryInterval,
+                maxRetryDelayInMs: maxRetryInterval,
+            });
         },
     };
 }
@@ -81013,7 +81246,8 @@ const configs = {
       'ccl@2021.8.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19135/l_oneapi_ccl_p_2021.8.0.25371_offline.sh',
       'ccl@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19029/l_oneapi_ccl_p_2021.7.1.16948_offline.sh',
 
-      dal: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d9f2cdb2-93ec-4c78-a3fb-a59d27050c16/intel-onedal-2025.0.0.958_offline.sh',
+      dal: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/928ba1dd-c2bc-41f6-a35f-8de41ddf055a/intel-onedal-2025.0.1.19_offline.sh',
+      'dal@2025.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/928ba1dd-c2bc-41f6-a35f-8de41ddf055a/intel-onedal-2025.0.1.19_offline.sh',
       'dal@2025.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d9f2cdb2-93ec-4c78-a3fb-a59d27050c16/intel-onedal-2025.0.0.958_offline.sh',
       'dal@2024.7.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ed2c397a-9a78-4466-9179-b39b7da07e83/l_daal_oneapi_p_2024.7.0.14_offline.sh',
       'dal@2024.6.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1edf7074-80f8-4b97-aad3-5023b41b7ecd/l_daal_oneapi_p_2024.6.0.418_offline.sh',
@@ -81025,7 +81259,8 @@ const configs = {
       'dal@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19122/l_daal_oneapi_p_2023.0.0.25395_offline.sh',
       'dal@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19032/l_daal_oneapi_p_2021.7.1.16996_offline.sh',
 
-      dnn: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/87e117ab-039b-437d-9c80-dcd5c9e675d5/intel-onednn-2025.0.0.862_offline.sh',
+      dnn: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6cfa324b-1591-4c0b-b8d2-97c5b3b272a7/intel-onednn-2025.0.1.12_offline.sh',
+      'dnn@2025.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6cfa324b-1591-4c0b-b8d2-97c5b3b272a7/intel-onednn-2025.0.1.12_offline.sh',
       'dnn@2025.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/87e117ab-039b-437d-9c80-dcd5c9e675d5/intel-onednn-2025.0.0.862_offline.sh',
       'dnn@2024.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7c850be0-b17d-4b7f-898d-3bc5fc36aa8d/l_onednn_p_2024.2.1.76_offline.sh',
       'dnn@2024.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6f830f51-56cd-4ea6-ade7-0f066c9b1939/l_onednn_p_2024.2.0.571_offline.sh',
@@ -81037,7 +81272,8 @@ const configs = {
       'dnn@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19137/l_onednn_p_2023.0.0.25399_offline.sh',
       'dnn@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19035/l_onednn_p_2022.2.1.16994_offline.sh',
 
-      dpl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/85ad74ff-f4fa-45e2-b50d-67d637d42baa/intel-onedpl-2022.7.0.647_offline.sh',
+      dpl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/de3c613f-829c-4bdc-aa2b-6129eece3bd9/intel-onedpl-2022.7.1.15_offline.sh',
+      'dpl@2022.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/de3c613f-829c-4bdc-aa2b-6129eece3bd9/intel-onedpl-2022.7.1.15_offline.sh',
       'dpl@2022.7.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/85ad74ff-f4fa-45e2-b50d-67d637d42baa/intel-onedpl-2022.7.0.647_offline.sh',
       'dpl@2022.6.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/fe007d71-c49f-4cdd-8a95-5c8e29c5b19c/l_oneDPL_p_2022.6.1.15_offline.sh',
       'dpl@2022.6.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/65565430-3eb6-49ad-ae51-e35314cc6f08/l_oneDPL_p_2022.6.0.560_offline.sh',
@@ -81048,7 +81284,10 @@ const configs = {
       'dpl@2022.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19133/l_oneDPL_p_2022.0.0.25335_offline.sh',
       'dpl@2021.7.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19046/l_oneDPL_p_2021.7.2.15007_offline.sh',
 
-      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ac92f2bb-4818-4e53-a432-f8b34d502f23/intel-dpcpp-cpp-compiler-2025.0.0.740_offline.sh',
+      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/84c039b6-2b7d-4544-a745-3fcf8afd643f/intel-dpcpp-cpp-compiler-2025.0.4.20_offline.sh',
+      'icx@2025.0.4': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/84c039b6-2b7d-4544-a745-3fcf8afd643f/intel-dpcpp-cpp-compiler-2025.0.4.20_offline.sh',
+      'icx@2025.0.3': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1cac4f39-2032-4aa9-86d7-e4f3e40e4277/intel-dpcpp-cpp-compiler-2025.0.3.9_offline.sh',
+      'icx@2025.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/4fd7c6b0-853f-458a-a8ec-421ab50a80a6/intel-dpcpp-cpp-compiler-2025.0.1.46_offline.sh',
       'icx@2025.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ac92f2bb-4818-4e53-a432-f8b34d502f23/intel-dpcpp-cpp-compiler-2025.0.0.740_offline.sh',
       'icx@2024.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/74587994-3c83-48fd-b963-b707521a63f4/l_dpcpp-cpp-compiler_p_2024.2.1.79_offline.sh',
       'icx@2024.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6780ac84-6256-4b59-a647-330eb65f32b6/l_dpcpp-cpp-compiler_p_2024.2.0.495_offline.sh',
@@ -81059,7 +81298,10 @@ const configs = {
       'icx@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19123/l_dpcpp-cpp-compiler_p_2023.0.0.25393_offline.sh',
       'icx@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19030/l_dpcpp-cpp-compiler_p_2022.2.1.16991_offline.sh',
 
-      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/69f79888-2d6c-4b20-999e-e99d72af68d4/intel-fortran-compiler-2025.0.0.723_offline.sh',
+      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ad42ee3b-7a2f-41cb-b902-689f651920da/intel-fortran-compiler-2025.0.4.21_offline.sh',
+      'ifx@2025.0.4': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ad42ee3b-7a2f-41cb-b902-689f651920da/intel-fortran-compiler-2025.0.4.21_offline.sh',
+      'ifx@2025.0.3': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/fafa2df1-4bb1-43f7-87c6-3c82f1bdc712/intel-fortran-compiler-2025.0.3.9_offline.sh',
+      'ifx@2025.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7ba31291-8a27-426f-88d5-8c2d65316655/intel-fortran-compiler-2025.0.1.41_offline.sh',
       'ifx@2025.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/69f79888-2d6c-4b20-999e-e99d72af68d4/intel-fortran-compiler-2025.0.0.723_offline.sh',
       'ifx@2024.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/5e7b0f1c-6f25-4cc8-94d7-3a527e596739/l_fortran-compiler_p_2024.2.1.80_offline.sh',
       'ifx@2024.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/801143de-6c01-4181-9911-57e00fe40181/l_fortran-compiler_p_2024.2.0.426_offline.sh',
@@ -81070,7 +81312,8 @@ const configs = {
       'ifx@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19105/l_fortran-compiler_p_2023.0.0.25394_offline.sh',
       'ifx@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/18998/l_fortran-compiler_p_2022.2.1.16992_offline.sh',
 
-      impi: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/4b14b28c-2ca6-4559-a0ca-8a157627e0c8/intel-mpi-2021.14.0.791_offline.sh',
+      impi: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1acd5e79-796c-401a-ab31-a3dc7b20c6a2/intel-mpi-2021.14.1.7_offline.sh',
+      'impi@2021.14.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1acd5e79-796c-401a-ab31-a3dc7b20c6a2/intel-mpi-2021.14.1.7_offline.sh',
       'impi@2021.14.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/4b14b28c-2ca6-4559-a0ca-8a157627e0c8/intel-mpi-2021.14.0.791_offline.sh',
       'impi@2021.13.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/364c798c-4cad-4c01-82b5-e1edd1b476af/l_mpi_oneapi_p_2021.13.1.769_offline.sh',
       'impi@2021.13.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/9f84e1e8-11b2-4bd1-8512-3e3343585956/l_mpi_oneapi_p_2021.13.0.719_offline.sh',
@@ -81104,7 +81347,8 @@ const configs = {
       'ippcp@2021.6.3': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19108/l_ippcp_oneapi_p_2021.6.3.25343_offline.sh',
       'ippcp@2021.6.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/18999/l_ippcp_oneapi_p_2021.6.2.15006_offline.sh',
 
-      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/79153e0f-74d7-45af-b8c2-258941adf58a/intel-onemkl-2025.0.0.940_offline.sh',
+      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/246ea40e-5aa7-42a4-81fa-0c029dc8650f/intel-onemkl-2025.0.1.16_offline.sh',
+      'mkl@2025.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/246ea40e-5aa7-42a4-81fa-0c029dc8650f/intel-onemkl-2025.0.1.16_offline.sh',
       'mkl@2025.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/79153e0f-74d7-45af-b8c2-258941adf58a/intel-onemkl-2025.0.0.940_offline.sh',
       'mkl@2024.2.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/89a381f6-f85d-4dda-ae62-30d51470f53c/l_onemkl_p_2024.2.2.17_offline.sh',
       'mkl@2024.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6e00e368-b61d-4f87-a409-9b510c022a37/l_onemkl_p_2024.2.1.105_offline.sh',
