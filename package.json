@@ -28,6 +28,6 @@
     "@opentelemetry/api": "^1.6.0",
     "@vercel/ncc": "^0.38.3",
     "glob": "^10.3.10",
-    "uuid": "^9.0.1"
+    "uuid": "^11.0.4"
   }
 }
