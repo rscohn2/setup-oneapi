@@ -97,16 +97,16 @@ If CI passes, merge main branch into v0 branch.
 
 You can add test cases to: CI_.
 
-.. _`intel-onepi-ccl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ccl/package.py
-.. _`intel-onepi-compilers`: https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-compilers/package.py
-.. _`intel-onepi-dal`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dal/package.py
-.. _`intel-onepi-dnn`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dnn/package.py
-.. _`intel-onepi-dpl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-dpl/package.py
-.. _`intel-onepi-ipp`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ipp/package.py
-.. _`intel-onepi-ippcp`:     https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-ippcp/package.py
-.. _`intel-onepi-mkl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-mkl/package.py
-.. _`intel-onepi-mpi`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-mpi/package.py
-.. _`intel-onepi-tbb`:       https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/intel-oneapi-tbb/package.py
+.. _`intel-onepi-ccl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_ccl/package.py
+.. _`intel-onepi-compilers`: https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_compilers/package.py
+.. _`intel-onepi-dal`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_dal/package.py
+.. _`intel-onepi-dnn`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_dnn/package.py
+.. _`intel-onepi-dpl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_dpl/package.py
+.. _`intel-onepi-ipp`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_ipp/package.py
+.. _`intel-onepi-ippcp`:     https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_ippcp/package.py
+.. _`intel-onepi-mkl`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_mkl/package.py
+.. _`intel-onepi-mpi`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_mpi/package.py
+.. _`intel-onepi-tbb`:       https://github.com/spack/spack/blob/develop/var/spack/repos/spack_repo/builtin/packages/intel_oneapi_tbb/package.py
 
 .. _CI: .github/workflows/main.yml
 .. _example: https://github.com/rscohn2/test-setup-oneapi/blob/main/.github/workflows/main.yml
