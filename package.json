@@ -22,7 +22,7 @@
     "@actions/cache": "^5.0.1",
     "@actions/core": "^2.0.1",
     "@actions/exec": "^2.0.0",
-    "@actions/github": "^6.0.0",
+    "@actions/github": "^7.0.0",
     "@actions/io": "^2.0.0",
     "@actions/tool-cache": "^2.0.1",
     "@opentelemetry/api": "^1.6.0",
