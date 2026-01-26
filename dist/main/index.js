@@ -91423,6 +91423,8 @@ class LRUCache {
         const cb = (v, updateCache = false) => {
             const { aborted } = ac.signal;
             const ignoreAbort = options.ignoreFetchAbort && v !== undefined;
+            const proceed = options.ignoreFetchAbort ||
+                !!(options.allowStaleOnFetchAbort && v !== undefined);
             if (options.status) {
                 if (aborted && !updateCache) {
                     options.status.fetchAborted = true;
@@ -91435,7 +91437,7 @@ class LRUCache {
                 }
             }
             if (aborted && !ignoreAbort && !updateCache) {
-                return fetchFail(ac.signal.reason);
+                return fetchFail(ac.signal.reason, proceed);
             }
             // either we didn't abort, and are still here, or we did, and ignored
             const bf = p;
@@ -91465,9 +91467,10 @@ class LRUCache {
                 options.status.fetchRejected = true;
                 options.status.fetchError = er;
             }
-            return fetchFail(er);
+            // do not pass go, do not collect $200
+            return fetchFail(er, false);
         };
-        const fetchFail = (er) => {
+        const fetchFail = (er, proceed) => {
             const { aborted } = ac.signal;
             const allowStaleAborted = aborted && options.allowStaleOnFetchAbort;
             const allowStale = allowStaleAborted || options.allowStaleOnFetchRejection;
@@ -91476,7 +91479,8 @@ class LRUCache {
             if (this.#valList[index] === p) {
                 // if we allow stale on fetch rejections, then we need to ensure that
                 // the stale value is not removed from the cache when the fetch fails.
-                const del = !noDelete || bf.__staleWhileFetching === undefined;
+                const del = !noDelete ||
+                    !proceed && bf.__staleWhileFetching === undefined;
                 if (del) {
                     this.#delete(k, 'fetch');
                 }
@@ -94976,7 +94980,8 @@ let key = 'v1'
 const configs = {
   linux: {
     urls: {
-      ccl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ecc6ecf3-aed4-48c0-bd90-cb768f96168d/intel-oneccl-2021.17.1.8_offline.sh',
+      ccl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c477188f-0ba1-4213-8945-22f16ebc8ecb/intel-oneccl-2021.17.2.6_offline.sh',
+      'ccl@2021.17.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c477188f-0ba1-4213-8945-22f16ebc8ecb/intel-oneccl-2021.17.2.6_offline.sh',
       'ccl@2021.17.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ecc6ecf3-aed4-48c0-bd90-cb768f96168d/intel-oneccl-2021.17.1.8_offline.sh',
       'ccl@2021.17.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/70c5cff4-d82e-4e3d-9b15-e6ea899be14d/intel-oneccl-2021.17.0.272_offline.sh',
       'ccl@2021.16.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/66ce2615-4f44-42d5-9b4b-69ca25df01fc/intel-oneccl-2021.16.1.10_offline.sh',
@@ -94993,7 +94998,8 @@ const configs = {
       'ccl@2021.8.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19135/l_oneapi_ccl_p_2021.8.0.25371_offline.sh',
       'ccl@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19029/l_oneapi_ccl_p_2021.7.1.16948_offline.sh',
 
-      dal: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c470125a-2268-496e-a54b-40e0e2961eb1/intel-onedal-2025.6.0.117_offline.sh',
+      dal: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19f5fbad-fc2e-48a7-b64c-0af30799f4e9/intel-onedal-2025.10.1.22_offline.sh',
+      'dal@2025.10.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19f5fbad-fc2e-48a7-b64c-0af30799f4e9/intel-onedal-2025.10.1.22_offline.sh',
       'dal@2025.6.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c470125a-2268-496e-a54b-40e0e2961eb1/intel-onedal-2025.6.0.117_offline.sh',
       'dal@2025.5.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6f7d2b45-7c33-4ab7-80ac-ac0f7f6e38ed/intel-onedal-2025.5.0.11_offline.sh',
       'dal@2025.4.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e4da59ef-aa3a-4223-b3a0-4728014113e6/intel-onedal-2025.4.0.655_offline.sh',
@@ -95041,7 +95047,8 @@ const configs = {
       'dpl@2022.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19133/l_oneDPL_p_2022.0.0.25335_offline.sh',
       'dpl@2021.7.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19046/l_oneDPL_p_2021.7.2.15007_offline.sh',
 
-      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/5adfc398-db78-488c-b98f-78461b3c5760/intel-dpcpp-cpp-compiler-2025.3.1.16_offline.sh',
+      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0d61d48a-4fe8-4cb2-bd9d-94d2c19c6227/intel-dpcpp-cpp-compiler-2025.3.2.26_offline.sh',
+      'icx@2025.3.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0d61d48a-4fe8-4cb2-bd9d-94d2c19c6227/intel-dpcpp-cpp-compiler-2025.3.2.26_offline.sh',
       'icx@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/5adfc398-db78-488c-b98f-78461b3c5760/intel-dpcpp-cpp-compiler-2025.3.1.16_offline.sh',
       'icx@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/44809add-596f-4484-9cd1-cc032460e241/intel-dpcpp-cpp-compiler-2025.3.0.322_offline.sh',
       'icx@2025.2.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/95aea65e-ead3-402f-838c-53d9f7bbaf3c/intel-dpcpp-cpp-compiler-2025.2.2.10_offline.sh',
@@ -95062,7 +95069,8 @@ const configs = {
       'icx@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19123/l_dpcpp-cpp-compiler_p_2023.0.0.25393_offline.sh',
       'icx@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19030/l_dpcpp-cpp-compiler_p_2022.2.1.16991_offline.sh',
 
-      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/724303ca-6927-4327-a560-e0aabb55b010/intel-fortran-compiler-2025.3.1.16_offline.sh',
+      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3e53d136-2870-4836-adb1-892b558fa34a/intel-fortran-compiler-2025.3.2.25_offline.sh',
+      'ifx@2025.3.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3e53d136-2870-4836-adb1-892b558fa34a/intel-fortran-compiler-2025.3.2.25_offline.sh',
       'ifx@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/724303ca-6927-4327-a560-e0aabb55b010/intel-fortran-compiler-2025.3.1.16_offline.sh',
       'ifx@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b3aa3ab5-c79d-4af4-8801-983ef00b90fd/intel-fortran-compiler-2025.3.0.325_offline.sh',
       'ifx@2025.2.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/05fdb0f1-5c91-4bdc-af11-cf7afe0c02fe/intel-fortran-compiler-2025.2.2.10_offline.sh',
@@ -95083,7 +95091,8 @@ const configs = {
       'ifx@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19105/l_fortran-compiler_p_2023.0.0.25394_offline.sh',
       'ifx@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/18998/l_fortran-compiler_p_2022.2.1.16992_offline.sh',
 
-      impi: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7ba1f01b-8910-4f49-ad09-27751feb8009/intel-mpi-2021.17.1.13_offline.sh',
+      impi: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/86923909-82e5-4c1a-9499-b4263e800a33/intel-mpi-2021.17.2.94_offline.sh',
+      'impi@2021.17.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/86923909-82e5-4c1a-9499-b4263e800a33/intel-mpi-2021.17.2.94_offline.sh',
       'impi@2021.17.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7ba1f01b-8910-4f49-ad09-27751feb8009/intel-mpi-2021.17.1.13_offline.sh',
       'impi@2021.17.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0a3cb474-49c7-45a9-9dea-104122592a63/intel-mpi-2021.17.0.377_offline.sh',
       'impi@2021.16.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/fc0ac5a0-c09e-443f-ba97-a63b7552ca4b/intel-mpi-2021.16.2.916_offline.sh',
@@ -95103,7 +95112,8 @@ const configs = {
       'impi@2021.8.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19131/l_mpi_oneapi_p_2021.8.0.25329_offline.sh',
       'impi@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19010/l_mpi_oneapi_p_2021.7.1.16815_offline.sh',
 
-      ipp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/9efbaac1-ae4e-4f55-b6ac-37093f852a04/intel-ipp-2022.3.0.394_offline.sh',
+      ipp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5ea6a8e-1b2d-4184-bf58-45c612fb2ee1/intel-ipp-2022.3.1.9_offline.sh',
+      'ipp@2022.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5ea6a8e-1b2d-4184-bf58-45c612fb2ee1/intel-ipp-2022.3.1.9_offline.sh',
       'ipp@2022.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/9efbaac1-ae4e-4f55-b6ac-37093f852a04/intel-ipp-2022.3.0.394_offline.sh',
       'ipp@2022.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d9649232-67ed-489e-8cd8-2c4c54b06135/intel-ipp-2022.2.0.583_offline.sh',
       'ipp@2022.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/a5a44f80-a3ef-45c3-a7be-d50157434d7c/intel-ipp-2022.1.0.649_offline.sh',
@@ -95131,7 +95141,8 @@ const configs = {
       'ippcp@2021.6.3': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19108/l_ippcp_oneapi_p_2021.6.3.25343_offline.sh',
       'ippcp@2021.6.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/18999/l_ippcp_oneapi_p_2021.6.2.15006_offline.sh',
 
-      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/2ad98b49-1fb2-4294-ab3d-6889b434ebd3/intel-onemkl-2025.3.0.462_offline.sh',
+      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6a17080f-f0de-41b9-b587-52f92512c59a/intel-onemkl-2025.3.1.11_offline.sh',
+      'mkl@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6a17080f-f0de-41b9-b587-52f92512c59a/intel-onemkl-2025.3.1.11_offline.sh',
       'mkl@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/2ad98b49-1fb2-4294-ab3d-6889b434ebd3/intel-onemkl-2025.3.0.462_offline.sh',
       'mkl@2025.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/47c7d946-fca1-441a-b0df-b094e3f045ea/intel-onemkl-2025.2.0.629_offline.sh',
       'mkl@2025.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/dc93af13-2b3f-40c3-a41b-2bc05a707a80/intel-onemkl-2025.1.0.803_offline.sh',
@@ -95147,7 +95158,8 @@ const configs = {
       'mkl@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19138/l_onemkl_p_2023.0.0.25398_offline.sh',
       'mkl@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19038/l_onemkl_p_2022.2.1.16993_offline.sh',
 
-      tbb: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1134c0a9-1960-465a-ac29-3b692e45f417/intel-onetbb-2022.3.0.383_offline.sh',
+      tbb: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/233a8b7a-ec95-4e51-bc5f-9dcd4f0d1dc3/intel-onetbb-2022.3.1.402_offline.sh',
+      'tbb@2022.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/233a8b7a-ec95-4e51-bc5f-9dcd4f0d1dc3/intel-onetbb-2022.3.1.402_offline.sh',
       'tbb@2022.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1134c0a9-1960-465a-ac29-3b692e45f417/intel-onetbb-2022.3.0.383_offline.sh',
       'tbb@2022.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7516db94-4877-4ffe-8dde-37e9a46e69a2/intel-onetbb-2022.2.0.508_offline.sh',
       'tbb@2022.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/5aeb45ec-41a8-46d7-b7b5-1f5ee4f55d61/intel-onetbb-2022.1.0.427_offline.sh',
