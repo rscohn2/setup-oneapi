@@ -79720,9 +79720,10 @@ exports.StorageBrowserPolicyFactory = StorageBrowserPolicyFactory;
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.StorageRetryPolicyFactory = exports.StorageRetryPolicy = exports.StorageRetryPolicyType = void 0;
+exports.StorageRetryPolicyFactory = exports.NewRetryPolicyFactory = exports.StorageRetryPolicy = exports.StorageRetryPolicyType = void 0;
 const StorageRetryPolicy_js_1 = __nccwpck_require__(7734);
 Object.defineProperty(exports, "StorageRetryPolicy", ({ enumerable: true, get: function () { return StorageRetryPolicy_js_1.StorageRetryPolicy; } }));
+Object.defineProperty(exports, "NewRetryPolicyFactory", ({ enumerable: true, get: function () { return StorageRetryPolicy_js_1.NewRetryPolicyFactory; } }));
 const StorageRetryPolicyType_js_1 = __nccwpck_require__(8622);
 Object.defineProperty(exports, "StorageRetryPolicyType", ({ enumerable: true, get: function () { return StorageRetryPolicyType_js_1.StorageRetryPolicyType; } }));
 /**
@@ -79961,6 +79962,7 @@ const tslib_1 = __nccwpck_require__(1860);
 tslib_1.__exportStar(__nccwpck_require__(6381), exports);
 var cache_js_1 = __nccwpck_require__(8376);
 Object.defineProperty(exports, "getCachedDefaultHttpClient", ({ enumerable: true, get: function () { return cache_js_1.getCachedDefaultHttpClient; } }));
+tslib_1.__exportStar(__nccwpck_require__(1420), exports);
 tslib_1.__exportStar(__nccwpck_require__(4399), exports);
 tslib_1.__exportStar(__nccwpck_require__(2159), exports);
 tslib_1.__exportStar(__nccwpck_require__(450), exports);
@@ -79970,18 +79972,26 @@ var RequestPolicy_js_1 = __nccwpck_require__(590);
 Object.defineProperty(exports, "BaseRequestPolicy", ({ enumerable: true, get: function () { return RequestPolicy_js_1.BaseRequestPolicy; } }));
 tslib_1.__exportStar(__nccwpck_require__(3611), exports);
 tslib_1.__exportStar(__nccwpck_require__(4238), exports);
-tslib_1.__exportStar(__nccwpck_require__(2312), exports);
 tslib_1.__exportStar(__nccwpck_require__(3100), exports);
 tslib_1.__exportStar(__nccwpck_require__(2505), exports);
-tslib_1.__exportStar(__nccwpck_require__(8622), exports);
-tslib_1.__exportStar(__nccwpck_require__(7734), exports);
 tslib_1.__exportStar(__nccwpck_require__(8178), exports);
 tslib_1.__exportStar(__nccwpck_require__(5369), exports);
 tslib_1.__exportStar(__nccwpck_require__(3233), exports);
-tslib_1.__exportStar(__nccwpck_require__(7321), exports);
 tslib_1.__exportStar(__nccwpck_require__(4174), exports);
 tslib_1.__exportStar(__nccwpck_require__(3602), exports);
 //# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 1420:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=interfaces.js.map
 
 /***/ }),
 
