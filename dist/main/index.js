@@ -80684,9 +80684,10 @@ exports.StorageBrowserPolicyFactory = StorageBrowserPolicyFactory;
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.StorageRetryPolicyFactory = exports.StorageRetryPolicy = exports.StorageRetryPolicyType = void 0;
+exports.StorageRetryPolicyFactory = exports.NewRetryPolicyFactory = exports.StorageRetryPolicy = exports.StorageRetryPolicyType = void 0;
 const StorageRetryPolicy_js_1 = __nccwpck_require__(27734);
 Object.defineProperty(exports, "StorageRetryPolicy", ({ enumerable: true, get: function () { return StorageRetryPolicy_js_1.StorageRetryPolicy; } }));
+Object.defineProperty(exports, "NewRetryPolicyFactory", ({ enumerable: true, get: function () { return StorageRetryPolicy_js_1.NewRetryPolicyFactory; } }));
 const StorageRetryPolicyType_js_1 = __nccwpck_require__(38622);
 Object.defineProperty(exports, "StorageRetryPolicyType", ({ enumerable: true, get: function () { return StorageRetryPolicyType_js_1.StorageRetryPolicyType; } }));
 /**
@@ -80925,6 +80926,7 @@ const tslib_1 = __nccwpck_require__(61860);
 tslib_1.__exportStar(__nccwpck_require__(86381), exports);
 var cache_js_1 = __nccwpck_require__(68376);
 Object.defineProperty(exports, "getCachedDefaultHttpClient", ({ enumerable: true, get: function () { return cache_js_1.getCachedDefaultHttpClient; } }));
+tslib_1.__exportStar(__nccwpck_require__(81420), exports);
 tslib_1.__exportStar(__nccwpck_require__(4399), exports);
 tslib_1.__exportStar(__nccwpck_require__(32159), exports);
 tslib_1.__exportStar(__nccwpck_require__(450), exports);
@@ -80934,18 +80936,26 @@ var RequestPolicy_js_1 = __nccwpck_require__(40590);
 Object.defineProperty(exports, "BaseRequestPolicy", ({ enumerable: true, get: function () { return RequestPolicy_js_1.BaseRequestPolicy; } }));
 tslib_1.__exportStar(__nccwpck_require__(63611), exports);
 tslib_1.__exportStar(__nccwpck_require__(74238), exports);
-tslib_1.__exportStar(__nccwpck_require__(22312), exports);
 tslib_1.__exportStar(__nccwpck_require__(83100), exports);
 tslib_1.__exportStar(__nccwpck_require__(92505), exports);
-tslib_1.__exportStar(__nccwpck_require__(38622), exports);
-tslib_1.__exportStar(__nccwpck_require__(27734), exports);
 tslib_1.__exportStar(__nccwpck_require__(78178), exports);
 tslib_1.__exportStar(__nccwpck_require__(35369), exports);
 tslib_1.__exportStar(__nccwpck_require__(53233), exports);
-tslib_1.__exportStar(__nccwpck_require__(77321), exports);
 tslib_1.__exportStar(__nccwpck_require__(24174), exports);
 tslib_1.__exportStar(__nccwpck_require__(3602), exports);
 //# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 81420:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=interfaces.js.map
 
 /***/ }),
 
@@ -82868,6 +82878,7 @@ exports.range = range;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.EXPANSION_MAX = void 0;
 exports.expand = expand;
 const balanced_match_1 = __nccwpck_require__(70516);
 const escSlash = '\0SLASH' + Math.random() + '\0';
@@ -82885,6 +82896,7 @@ const openPattern = /\\{/g;
 const closePattern = /\\}/g;
 const commaPattern = /\\,/g;
 const periodPattern = /\\./g;
+exports.EXPANSION_MAX = 100_000;
 function numeric(str) {
     return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
 }
@@ -82930,10 +82942,11 @@ function parseCommaParts(str) {
     parts.push.apply(parts, p);
     return parts;
 }
-function expand(str) {
+function expand(str, options = {}) {
     if (!str) {
         return [];
     }
+    const { max = exports.EXPANSION_MAX } = options;
     // I don't know why Bash 4.3 does this, but it does.
     // Anything starting with {} will have the first two bytes preserved
     // but *only* at the top level, so {},a}b will not expand to anything,
@@ -82943,7 +82956,7 @@ function expand(str) {
     if (str.slice(0, 2) === '{}') {
         str = '\\{\\}' + str.slice(2);
     }
-    return expand_(escapeBraces(str), true).map(unescapeBraces);
+    return expand_(escapeBraces(str), max, true).map(unescapeBraces);
 }
 function embrace(str) {
     return '{' + str + '}';
@@ -82957,7 +82970,7 @@ function lte(i, y) {
 function gte(i, y) {
     return i >= y;
 }
-function expand_(str, isTop) {
+function expand_(str, max, isTop) {
     /** @type {string[]} */
     const expansions = [];
     const m = (0, balanced_match_1.balanced)('{', '}', str);
@@ -82965,9 +82978,9 @@ function expand_(str, isTop) {
         return [str];
     // no need to expand pre, since it is guaranteed to be free of brace-sets
     const pre = m.pre;
-    const post = m.post.length ? expand_(m.post, false) : [''];
+    const post = m.post.length ? expand_(m.post, max, false) : [''];
     if (/\$$/.test(m.pre)) {
-        for (let k = 0; k < post.length; k++) {
+        for (let k = 0; k < post.length && k < max; k++) {
             const expansion = pre + '{' + m.body + '}' + post[k];
             expansions.push(expansion);
         }
@@ -82981,7 +82994,7 @@ function expand_(str, isTop) {
             // {a},b}
             if (m.post.match(/,(?!,).*\}/)) {
                 str = m.pre + '{' + m.body + escClose + m.post;
-                return expand_(str);
+                return expand_(str, max, true);
             }
             return [str];
         }
@@ -82993,7 +83006,7 @@ function expand_(str, isTop) {
             n = parseCommaParts(m.body);
             if (n.length === 1 && n[0] !== undefined) {
                 // x{{a,b}}y ==> x{a}y x{b}y
-                n = expand_(n[0], false).map(embrace);
+                n = expand_(n[0], max, false).map(embrace);
                 //XXX is this necessary? Can't seem to hit it in tests.
                 /* c8 ignore start */
                 if (n.length === 1) {
@@ -83047,11 +83060,11 @@ function expand_(str, isTop) {
         else {
             N = [];
             for (let j = 0; j < n.length; j++) {
-                N.push.apply(N, expand_(n[j], false));
+                N.push.apply(N, expand_(n[j], max, false));
             }
         }
         for (let j = 0; j < N.length; j++) {
-            for (let k = 0; k < post.length; k++) {
+            for (let k = 0; k < post.length && expansions.length < max; k++) {
                 const expansion = pre + N[j] + post[k];
                 if (!isTop || isSequence || expansion) {
                     expansions.push(expansion);
