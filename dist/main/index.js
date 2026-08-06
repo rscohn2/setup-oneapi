@@ -14609,6 +14609,20 @@ var escClose = '\0CLOSE'+Math.random()+'\0';
 var escComma = '\0COMMA'+Math.random()+'\0';
 var escPeriod = '\0PERIOD'+Math.random()+'\0';
 
+var EXPANSION_MAX = 100000
+
+// `EXPANSION_MAX` caps the *number* of expansions, but not their length. An
+// input like `'{a,b}'.repeat(1500)` stays under that count - its output is
+// truncated to 100k results - while making every result ~1500 characters
+// long. The result set, and the intermediate arrays built while combining
+// brace sets, then grow large enough to exhaust memory and crash the process
+// (CVE-2026-14257). `EXPANSION_MAX_LENGTH` bounds the total number of
+// characters the accumulator may hold at any point, so memory stays flat no
+// matter how many brace groups are chained. The limit sits well above any
+// realistic expansion (100k results hitting `EXPANSION_MAX` measure ~1M
+// characters) so legitimate input is unaffected.
+var EXPANSION_MAX_LENGTH = 4000000
+
 function numeric(str) {
   return parseInt(str, 10) == str
     ? parseInt(str, 10)
@@ -14667,7 +14681,8 @@ function expandTop(str, options) {
     return [];
 
   options = options || {};
-  var max = options.max == null ? Infinity : options.max;
+  var max = options.max == null ? EXPANSION_MAX : options.max;
+  var maxLength = options.maxLength == null ? EXPANSION_MAX_LENGTH : options.maxLength;
 
   // I don't know why Bash 4.3 does this, but it does.
   // Anything starting with {} will have the first two bytes preserved
@@ -14679,7 +14694,7 @@ function expandTop(str, options) {
     str = '\\{\\}' + str.substr(2);
   }
 
-  return expand(escapeBraces(str), max, true).map(unescapeBraces);
+  return expand(escapeBraces(str), max, maxLength, true).map(unescapeBraces);
 }
 
 function identity(e) {
@@ -14700,15 +14715,155 @@ function gte(i, y) {
   return i >= y;
 }
 
-function expand(str, max, isTop) {
-  var expansions = [];
+// Build `{ acc[a] + pre + values[v] }` for every combination, capping the
+// number of results at `max` and the total number of characters at `maxLength`.
+// This is the one place output grows, so bounding it here keeps the single
+// accumulator - and therefore memory - flat regardless of how many brace groups
+// are combined (CVE-2026-14257).
+//
+// `base[a]` is the length of the part of `acc[a]` that predates the current
+// empty-drop baseline (see `expand`). The matching baselines for the results
+// are appended to `outBase`, which the caller carries forward alongside them.
+function combine(
+  acc,
+  base,
+  pre,
+  values,
+  max,
+  maxLength,
+  dropEmpties,
+  outBase
+) {
+  var out = []
+  var length = 0
+  for (var a = 0; a < acc.length; a++) {
+    for (var v = 0; v < values.length; v++) {
+      if (out.length >= max) return out
+      var expansion = acc[a] + pre + values[v]
+      // Bash drops empty results at the top level. Skip them before they count
+      // against `max`, so `max` bounds the number of *kept* results. "Empty"
+      // means "adds nothing past the baseline", not "empty overall".
+      if (dropEmpties && expansion.length === base[a]) continue
+      if (length + expansion.length > maxLength) return out
+      out.push(expansion)
+      outBase.push(base[a])
+      length += expansion.length
+    }
+  }
+  return out
+}
 
-  // The `{a},b}` rewrite below restarts expansion on a rewritten string with
-  // the same `max` and `isTop = true`. Loop instead of recursing so a long run
-  // of non-expanding `{}` groups can't exhaust the call stack.
+// The expansion values of a single numeric (`1..5`) or alphabetic (`a..e..2`)
+// sequence body.
+function expandSequence(
+  body,
+  isAlphaSequence,
+  max,
+  maxLength
+) {
+  var n = body.split(/\.\./)
+  var N = []
+  // A sequence body always splits into two or three parts, but the compiler
+  // can't know that.
+  /* c8 ignore start */
+  if (n[0] === undefined || n[1] === undefined) {
+    return N
+  }
+  /* c8 ignore stop */
+  var x = numeric(n[0])
+  var y = numeric(n[1])
+  var width = Math.max(n[0].length, n[1].length)
+  var incr =
+    n.length === 3 && n[2] !== undefined ?
+      Math.max(Math.abs(numeric(n[2])), 1)
+    : 1
+  var test = lte
+  var reverse = y < x
+  if (reverse) {
+    incr *= -1
+    test = gte
+  }
+  var pad = n.some(isPadded)
+
+  var length = 0
+  for (var i = x; test(i, y) && N.length < max; i += incr) {
+    var c
+    if (isAlphaSequence) {
+      c = String.fromCharCode(i)
+      if (c === '\\') {
+        c = ''
+      }
+    } else {
+      c = String(i)
+      if (pad) {
+        var need = width - c.length
+        if (need > 0) {
+          var z = new Array(need + 1).join('0')
+          if (i < 0) {
+            c = '-' + z + c.slice(1)
+          } else {
+            c = z + c
+          }
+        }
+      }
+    }
+    if (length + c.length > maxLength) break
+    N.push(c)
+    length += c.length
+  }
+  return N
+}
+
+function expand(
+  str,
+  max,
+  maxLength,
+  isTop
+) {
+  // Consume the string's top-level brace groups left to right, threading a
+  // running set of combined prefixes (`acc`). Expanding the tail iteratively -
+  // rather than recursing on `m.post` once per group - keeps the native stack
+  // depth constant, so deeply chained input (`'{a,b}'.repeat(3000)`) can no
+  // longer overflow the stack, and leaves a single accumulator whose size
+  // `maxLength` bounds directly (CVE-2026-14257).
+  var acc = ['']
+
+  // Bash drops empty results, but only when the *first* group of the run is a
+  // comma set - a sequence like `{a..\}` may legitimately yield ''. The drop
+  // is on the final strings, so it is applied to whichever `combine` produces
+  // them (the one with no brace set left in the tail).
+  //
+  // The old implementation recursed on `m.post`, so the drop tested only the
+  // expansion of the current call's substring. The `{a},b}` rewrite below turns
+  // `isTop` back on part-way through a string, starting a fresh such run, so
+  // the drop must ignore whatever `acc` already holds from earlier groups.
+  // `accBase[a]` records how much of `acc[a]` predates the current run;
+  // `combine` treats an expansion as empty when it adds nothing past that.
+  var accBase = [0]
+  var dropEmpties = false
+  var firstGroup = true
+  var nextBase
+
   for (;;) {
     var m = balanced('{', '}', str);
-    if (!m || /\$$/.test(m.pre)) return [str];
+
+    // No brace set left: the rest of the string is literal.
+    if (!m) {
+      return combine(acc, accBase, str, [''], max, maxLength, dropEmpties, [])
+    }
+
+    // no need to expand pre, since it is guaranteed to be free of brace-sets
+    var pre = m.pre;
+
+    // For compatibility reasons, `${` is not eligible for brace expansion, and
+    // on the 1.x line it suppresses expansion of the rest of the string too:
+    // the whole remainder is literal. The 2.x and 5.x lines instead keep
+    // expanding the tail, which is what bash does, but changing that here would
+    // be a breaking change for 1.x consumers. Routed through `combine` so the
+    // result is still bounded by `max` and `maxLength`.
+    if (/\$$/.test(pre)) {
+      return combine(acc, accBase, str, [''], max, maxLength, dropEmpties, [])
+    }
 
     var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
     var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
@@ -14718,94 +14873,112 @@ function expand(str, max, isTop) {
       // {a},b}
       if (m.post.match(/,(?!,).*\}/)) {
         str = m.pre + '{' + m.body + escClose + m.post;
+        // The rewritten string is expanded as if it were a fresh top-level one,
+        // so start a new empty-drop run: anchor the baseline at what `acc`
+        // holds now, and let the next expanding group decide whether to drop.
         isTop = true
+        firstGroup = true
+        dropEmpties = false
+        accBase = []
+        for (var b = 0; b < acc.length; b++) {
+          accBase.push(acc[b].length)
+        }
         continue
       }
-      return [str];
+      // Nothing here expands, so the whole remaining string is literal.
+      return combine(
+        acc,
+        accBase,
+        pre + '{' + m.body + '}' + m.post,
+        [''],
+        max,
+        maxLength,
+        dropEmpties,
+        []
+      )
     }
 
-    var n;
+    if (firstGroup) {
+      dropEmpties = isTop && !isSequence
+      firstGroup = false
+    }
+
+    var values;
     if (isSequence) {
-      n = m.body.split(/\.\./);
+      values = expandSequence(m.body, isAlphaSequence, max, maxLength);
     } else {
-      n = parseCommaParts(m.body);
-      if (n.length === 1) {
+      var n = parseCommaParts(m.body);
+      if (n.length === 1 && n[0] !== undefined) {
         // x{{a,b}}y ==> x{a}y x{b}y
-        n = expand(n[0], max, false).map(embrace);
+        n = expand(n[0], max, maxLength, false).map(embrace);
+        //XXX is this necessary? Can't seem to hit it in tests.
+        /* c8 ignore start */
         if (n.length === 1) {
-          var post = m.post.length
-            ? expand(m.post, max, false)
-            : [''];
-          return post.map(function(p) {
-            return m.pre + n[0] + p;
-          });
+          nextBase = []
+          acc = combine(
+            acc,
+            accBase,
+            pre + n[0],
+            [''],
+            max,
+            maxLength,
+            dropEmpties && !m.post.length,
+            nextBase
+          )
+          accBase = nextBase
+          if (!m.post.length) break
+          str = m.post
+          continue
+        }
+        /* c8 ignore stop */
+      }
+
+      // Values that `combine` is going to drop as empty produce no result, so
+      // they must not count against `max` - otherwise `{a,,b}` with `max: 2`
+      // would stop at `['a', '']` and yield one result instead of two. Skipping
+      // them outright keeps `values` bounded while leaving `max` a bound on
+      // *kept* results. A value is dropped when it adds nothing past the
+      // baseline, which is what `combine` tests.
+      var dropsEmpties = dropEmpties && !m.post.length && !pre
+      for (var d = 0; dropsEmpties && d < acc.length; d++) {
+        if (acc[d].length !== accBase[d]) {
+          dropsEmpties = false
         }
       }
-    }
 
-    // at this point, n is the parts, and we know it's not a comma set
-    // with a single entry.
-
-    // no need to expand pre, since it is guaranteed to be free of brace-sets
-    var pre = m.pre;
-    var post = m.post.length
-      ? expand(m.post, max, false)
-      : [''];
-
-    var N;
-
-    if (isSequence) {
-      var x = numeric(n[0]);
-      var y = numeric(n[1]);
-      var width = Math.max(n[0].length, n[1].length)
-      var incr = n.length == 3
-        ? Math.max(Math.abs(numeric(n[2])), 1)
-        : 1;
-      var test = lte;
-      var reverse = y < x;
-      if (reverse) {
-        incr *= -1;
-        test = gte;
-      }
-      var pad = n.some(isPadded);
-
-      N = [];
-
-      for (var i = x; test(i, y) && N.length < max; i += incr) {
-        var c;
-        if (isAlphaSequence) {
-          c = String.fromCharCode(i);
-          if (c === '\\')
-            c = '';
-        } else {
-          c = String(i);
-          if (pad) {
-            var need = width - c.length;
-            if (need > 0) {
-              var z = new Array(need + 1).join('0');
-              if (i < 0)
-                c = '-' + z + c.slice(1);
-              else
-                c = z + c;
-            }
+      values = []
+      var valuesLength = 0
+      outer: for (var j = 0; j < n.length; j++) {
+        var expanded = expand(n[j], max, maxLength, false)
+        for (var k = 0; k < expanded.length; k++) {
+          var v = expanded[k]
+          if (dropsEmpties && !v) continue
+          if (values.length >= max || valuesLength + v.length > maxLength) {
+            break outer
           }
+          values.push(v)
+          valuesLength += v.length
         }
-        N.push(c);
-      }
-    } else {
-      N = concatMap(n, function(el) { return expand(el, max, false) });
-    }
-
-    for (var j = 0; j < N.length; j++) {
-      for (var k = 0; k < post.length && expansions.length < max; k++) {
-        var expansion = pre + N[j] + post[k];
-        if (!isTop || isSequence || expansion)
-          expansions.push(expansion);
       }
     }
 
-    return expansions;
+    nextBase = []
+    acc = combine(
+      acc,
+      accBase,
+      pre,
+      values,
+      max,
+      maxLength,
+      dropEmpties && !m.post.length,
+      nextBase
+    )
+    accBase = nextBase
+    if (!m.post.length) break
+    str = m.post
   }
+
+  return acc
 }
 
 
@@ -22778,7 +22951,13 @@ function processHeader (request, key, val) {
       } else if (typeof val[i] === 'object') {
         throw new InvalidArgumentError(`invalid ${key} header`)
       } else {
-        arr.push(`${val[i]}`)
+        // Coerce primitives (and reject unsafe coercions such as functions
+        // with a crafted toString/Symbol.toPrimitive).
+        const str = `${val[i]}`
+        if (!isValidHeaderValue(str)) {
+          throw new InvalidArgumentError(`invalid ${key} header`)
+        }
+        arr.push(str)
       }
     }
     val = arr
@@ -22789,7 +22968,12 @@ function processHeader (request, key, val) {
   } else if (val === null) {
     val = ''
   } else {
+    // Coerce primitives (and reject unsafe coercions such as functions
+    // with a crafted toString/Symbol.toPrimitive).
     val = `${val}`
+    if (!isValidHeaderValue(val)) {
+      throw new InvalidArgumentError(`invalid ${key} header`)
+    }
   }
 
   if (headerName === 'host') {
@@ -24166,6 +24350,7 @@ const {
   RequestContentLengthMismatchError,
   ResponseContentLengthMismatchError,
   RequestAbortedError,
+  InvalidArgumentError,
   HeadersTimeoutError,
   HeadersOverflowError,
   SocketError,
@@ -25149,8 +25334,16 @@ function writeH1 (client, request) {
     }
     body = bodyStream.stream
     contentLength = bodyStream.length
-  } else if (util.isBlobLike(body) && request.contentType == null && body.type) {
-    headers.push('content-type', body.type)
+  } else if (util.isBlobLike(body) && request.contentType == null) {
+    const contentType = body.type
+    if (contentType) {
+      const contentTypeValue = `${contentType}`
+      if (!util.isValidHeaderValue(contentTypeValue)) {
+        util.errorRequest(client, request, new InvalidArgumentError('invalid content-type header'))
+        return false
+      }
+      headers.push('content-type', contentTypeValue)
+    }
   }
 
   if (body && typeof body.read === 'function') {
@@ -28637,6 +28830,28 @@ function calculateRetryAfterHeader (retryAfter) {
   return new Date(retryAfter).getTime() - current
 }
 
+function validatePartialResponseContentLength (headers, range, statusCode, retryCount) {
+  const contentLength = headers['content-length']
+  if (contentLength == null) {
+    return null
+  }
+
+  if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) {
+    return null
+  }
+
+  const length = Number(contentLength)
+  const expectedLength = range.end - range.start + 1
+  if (!Number.isFinite(length) || length !== expectedLength) {
+    return new RequestRetryError('Content-Length mismatch', statusCode, {
+      headers,
+      data: { count: retryCount }
+    })
+  }
+
+  return null
+}
+
 class RetryHandler {
   constructor (opts, handlers) {
     const { retryOptions, ...dispatchOpts } = opts
@@ -28851,6 +29066,12 @@ class RetryHandler {
         return false
       }
 
+      const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount)
+      if (contentLengthError != null) {
+        this.abort(contentLengthError)
+        return false
+      }
+
       const { start, size, end = size - 1 } = contentRange
 
       assert(this.start === start, 'content-range mismatch')
@@ -28872,6 +29093,12 @@ class RetryHandler {
             resume,
             statusMessage
           )
+        }
+
+        const contentLengthError = validatePartialResponseContentLength(headers, range, statusCode, this.retryCount)
+        if (contentLengthError != null) {
+          this.abort(contentLengthError)
+          return false
         }
 
         const { start, size, end = size - 1 } = range
@@ -33145,7 +33372,7 @@ function validateCookiePath (path) {
 
     if (
       code < 0x20 || // exclude CTLs (0-31)
-      code === 0x7F || // DEL
+      code > 0x7E || // exclude DEL and non-ascii
       code === 0x3B // ;
     ) {
       throw new Error('Invalid cookie path')
@@ -33154,16 +33381,80 @@ function validateCookiePath (path) {
 }
 
 /**
- * I have no idea why these values aren't allowed to be honest,
- * but Deno tests these. - Khafra
+ * <let-dig> ::= <letter> | <digit>
+ *
+ * <letter> ::= any one of the 52 alphabetic characters A through Z in
+ * upper case and a through z in lower case
+ *
+ * <digit> ::= any one of the ten digits 0 through 9r
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+ * @param {number} code
+ */
+function isLetterOrDigit (code) {
+  return (
+    (code >= 0x30 && code <= 0x39) || // 0-9
+    (code >= 0x41 && code <= 0x5A) || // A-Z
+    (code >= 0x61 && code <= 0x7A) // a-z
+  )
+}
+
+/**
+ * Validates a cookie domain against the "preferred name syntax".
+ *
+ * <domain>      ::= <subdomain> | " "
+ * <subdomain>   ::= <label> | <subdomain> "." <label>
+ * <label>       ::= <let-dig> [ [ <ldh-str> ] <let-dig> ]
+ * <ldh-str>     ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+ * <let-dig-hyp> ::= <let-dig> | "-"
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+ * @see https://www.rfc-editor.org/rfc/rfc1123#section-2.1
+ * @see https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4
  * @param {string} domain
  */
 function validateCookieDomain (domain) {
-  if (
-    domain.startsWith('-') ||
-    domain.endsWith('.') ||
-    domain.endsWith('-')
-  ) {
+  // <domain> ::= <subdomain> | " "
+  if (domain === ' ') {
+    return
+  }
+
+  if (domain.length > 255) {
+    throw new Error('Invalid cookie domain')
+  }
+
+  let labelLength = 0
+
+  for (let i = 0; i < domain.length; ++i) {
+    const code = domain.charCodeAt(i)
+
+    if (code === 0x2E) {
+      if (labelLength === 0) {
+        throw new Error('Invalid cookie domain')
+      }
+
+      if (domain.charCodeAt(i - 1) === 0x2D) { // "-"
+        throw new Error('Invalid cookie domain')
+      }
+
+      labelLength = 0
+      continue
+    }
+
+    if (labelLength === 0 && !isLetterOrDigit(code)) {
+      throw new Error('Invalid cookie domain')
+    }
+
+    if (!isLetterOrDigit(code) && code !== 0x2D) { // "-"
+      throw new Error('Invalid cookie domain')
+    }
+
+    if (++labelLength > 63) {
+      throw new Error('Invalid cookie domain')
+    }
+  }
+
+  if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 0x2D) { // "-"
     throw new Error('Invalid cookie domain')
   }
 }
@@ -33306,7 +33597,13 @@ function stringify (cookie) {
 
     const [key, ...value] = part.split('=')
 
-    out.push(`${key.trim()}=${value.join('=')}`)
+    const trimmedKey = key.trim()
+    const joinedValue = value.join('=')
+
+    validateCookieName(trimmedKey)
+    validateCookieValue(joinedValue)
+
+    out.push(`${trimmedKey}=${joinedValue}`)
   }
 
   return out.join('; ')
@@ -83767,6 +84064,52 @@ class StorageCRC64Calculator {
 
 /***/ }),
 
+/***/ 2891:
+/***/ ((module) => {
+
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var StorageResponseFormat_exports = {};
+__export(StorageResponseFormat_exports, {
+  StorageResponseFormat: () => StorageResponseFormat
+});
+module.exports = __toCommonJS(StorageResponseFormat_exports);
+const StorageResponseFormat = {
+  /**
+   * Default. Currently maps to {@link StorageResponseFormat.Xml}, but may be updated in future releases.
+   */
+  Auto: "Auto",
+  /**
+   * Use XML to return list results.
+   */
+  Xml: "Xml",
+  /**
+   * Use Apache Arrow to return list results.
+   */
+  Arrow: "Arrow"
+};
+// Annotate the CommonJS export names for ESM import in node:
+0 && (0);
+//# sourceMappingURL=StorageResponseFormat.js.map
+
+
+/***/ }),
+
 /***/ 77321:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -84692,16 +85035,13 @@ function getCachedDefaultHttpClient() {
 /***/ }),
 
 /***/ 92626:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ ((module) => {
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// ESM compatibility block omitted in CommonJS build.
-
 var NativeCRC64 = (() => {
   var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
-  if (typeof __filename !== 'undefined') _scriptDir = _scriptDir || __filename;
   return (
 function(NativeCRC64) {
   NativeCRC64 = NativeCRC64 || {};
@@ -84807,52 +85147,10 @@ function logExceptionOnExit(e) {
 
 if (ENVIRONMENT_IS_NODE) {
   if (typeof process == 'undefined' || !process.release || process.release.name !== 'node') throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
-// NODE-READ-START (this block is replaced with a no-op in dist/browser and dist/react-native by copyJSFiles.cjs)
-  // `require()` is no-op in an ESM module, use `createRequire()` to construct
-  // the require()` function.  This is only necessary for multi-environment
-  // builds, `-sENVIRONMENT=node` emits a static import declaration instead.
-  // TODO: Swap all `require()`'s with `import()`'s?
-  // These modules will usually be used on Node.js. Load them eagerly to avoid
-  // the complexity of lazy-loading.
-  var fs = __nccwpck_require__(79896);
-  var nodePath = __nccwpck_require__(16928);
-
-  if (ENVIRONMENT_IS_WORKER) {
-    scriptDirectory = nodePath.dirname(scriptDirectory) + '/';
-  } else {
-    scriptDirectory = __dirname + '/';
-  }
-
-// include: node_shell_read.js
-
-
-read_ = (filename, binary) => {
-  // We need to re-wrap `file://` strings to URLs. Normalizing isn't
-  // necessary in that case, the path should already be absolute.
-  filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  return fs.readFileSync(filename, binary ? undefined : 'utf8');
-};
-
-readBinary = (filename) => {
-  var ret = read_(filename, true);
-  if (!ret.buffer) {
-    ret = new Uint8Array(ret);
-  }
-  assert(ret.buffer);
-  return ret;
-};
-
-readAsync = (filename, onload, onerror) => {
-  // See the comment in the `read_` function.
-  filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  fs.readFile(filename, function(err, data) {
-    if (err) onerror(err);
-    else onload(data.buffer);
-  });
-};
-
-// end include: node_shell_read.js
-// NODE-READ-END
+  // The wasm is base64-embedded (see `binaryInString`) and loaded via `getBinary()`,
+  // so the Node fs/path read hooks emitted by Emscripten are never exercised and
+  // have been removed. This keeps the file free of Node built-in imports so it can be
+  // consumed as-is by web bundlers and by ESM-to-CommonJS bundlers (see issue #39057).
   if (process['argv'].length > 1) {
     thisProgram = process['argv'][1].replace(/\\/g, '/');
   }
@@ -84891,26 +85189,6 @@ if (ENVIRONMENT_IS_SHELL) {
 
   if ((typeof process == 'object' && "function" === 'function') || typeof window == 'object' || typeof importScripts == 'function') throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
 
-  if (typeof read != 'undefined') {
-    read_ = function shell_read(f) {
-      return read(f);
-    };
-  }
-
-  readBinary = function readBinary(f) {
-    let data;
-    if (typeof readbuffer == 'function') {
-      return new Uint8Array(readbuffer(f));
-    }
-    data = read(f, 'binary');
-    assert(typeof data == 'object');
-    return data;
-  };
-
-  readAsync = function readAsync(f, onload, onerror) {
-    setTimeout(() => onload(readBinary(f)), 0);
-  };
-
   if (typeof scriptArgs != 'undefined') {
     arguments_ = scriptArgs;
   } else if (typeof arguments != 'undefined') {
@@ -84937,72 +85215,9 @@ if (ENVIRONMENT_IS_SHELL) {
 // Node.js workers are detected as a combination of ENVIRONMENT_IS_WORKER and
 // ENVIRONMENT_IS_NODE.
 if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
-  if (ENVIRONMENT_IS_WORKER) { // Check worker, not web, since window could be polyfilled
-    scriptDirectory = self.location.href;
-  } else if (typeof document != 'undefined' && document.currentScript) { // web
-    scriptDirectory = document.currentScript.src;
-  }
-  // When MODULARIZE, this JS may be executed later, after document.currentScript
-  // is gone, so we saved it, and we use it here instead of any other info.
-  if (_scriptDir) {
-    scriptDirectory = _scriptDir;
-  }
-  // blob urls look like blob:http://site.com/etc/etc and we cannot infer anything from them.
-  // otherwise, slice off the final part of the url to find the script directory.
-  // if scriptDirectory does not contain a slash, lastIndexOf will return -1,
-  // and scriptDirectory will correctly be replaced with an empty string.
-  // If scriptDirectory contains a query (starting with ?) or a fragment (starting with #),
-  // they are removed because they could contain a slash.
-  if (scriptDirectory.indexOf('blob:') !== 0) {
-    scriptDirectory = scriptDirectory.substr(0, scriptDirectory.replace(/[?#].*/, "").lastIndexOf('/')+1);
-  } else {
-    scriptDirectory = '';
-  }
-
   if (!(typeof window == 'object' || typeof importScripts == 'function')) throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
-
-  // Differentiate the Web Worker from the Node Worker case, as reading must
-  // be done differently.
-  {
-// include: web_or_worker_shell_read.js
-
-
-  read_ = (url) => {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', url, false);
-      xhr.send(null);
-      return xhr.responseText;
-  }
-
-  if (ENVIRONMENT_IS_WORKER) {
-    readBinary = (url) => {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url, false);
-        xhr.responseType = 'arraybuffer';
-        xhr.send(null);
-        return new Uint8Array(/** @type{!ArrayBuffer} */(xhr.response));
-    };
-  }
-
-  readAsync = (url, onload, onerror) => {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-    xhr.onload = () => {
-      if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
-        onload(xhr.response);
-        return;
-      }
-      onerror();
-    };
-    xhr.onerror = onerror;
-    xhr.send(null);
-  }
-
-// end include: web_or_worker_shell_read.js
-  }
-
-  setWindowTitle = (title) => document.title = title;
+  // The XHR-based read hooks emitted by Emscripten are unused because the wasm is
+  // base64-embedded; they have been removed so the file contains no DOM/XHR I/O.
 } else
 {
   throw new Error('environment detection error');
@@ -87917,6 +88132,7 @@ __reExport(indexPlatform_exports, __nccwpck_require__(35793), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(36941), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(13519), module.exports);
 var import_cache = __nccwpck_require__(68376);
+__reExport(indexPlatform_exports, __nccwpck_require__(2891), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(4399), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(32159), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(450), module.exports);
@@ -87930,6 +88146,7 @@ __reExport(indexPlatform_exports, __nccwpck_require__(92505), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(78178), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(35369), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(53233), module.exports);
+__reExport(indexPlatform_exports, __nccwpck_require__(22876), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(24174), module.exports);
 __reExport(indexPlatform_exports, __nccwpck_require__(3602), module.exports);
 // Annotate the CommonJS export names for ESM import in node:
@@ -88274,6 +88491,52 @@ function storageCorrectContentLengthPolicy() {
 
 /***/ }),
 
+/***/ 22876:
+/***/ ((module) => {
+
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var StorageRedirectRangeHeaderPolicy_exports = {};
+__export(StorageRedirectRangeHeaderPolicy_exports, {
+  storageRedirectRangeHeaderPolicy: () => storageRedirectRangeHeaderPolicy,
+  storageRedirectRangeHeaderPolicyName: () => storageRedirectRangeHeaderPolicyName
+});
+module.exports = __toCommonJS(StorageRedirectRangeHeaderPolicy_exports);
+const storageRedirectRangeHeaderPolicyName = "storageRedirectRangeHeaderPolicy";
+function storageRedirectRangeHeaderPolicy() {
+  return {
+    name: storageRedirectRangeHeaderPolicyName,
+    async sendRequest(request, next) {
+      if (request.headers.has("range")) {
+        request.headers.set("x-ms-range", request.headers.get("range"));
+        request.headers.delete("range");
+      }
+      return next(request);
+    }
+  };
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (0);
+//# sourceMappingURL=StorageRedirectRangeHeaderPolicy.js.map
+
+
+/***/ }),
+
 /***/ 24174:
 /***/ ((module) => {
 
@@ -88307,6 +88570,12 @@ function storageRequestFailureDetailsParserPolicy() {
     async sendRequest(request, next) {
       try {
         const response = await next(request);
+        if (response.status === 400 && response.bodyAsText?.includes("<Error><Code>InvalidHeaderValue</Code>") && response.bodyAsText.includes("<HeaderName>x-ms-version</HeaderName>")) {
+          response.bodyAsText = response.bodyAsText.replace(
+            /<Message>.*<\/Message>/s,
+            "<Message>The provided service version is not enabled on this storage account. Please see https://learn.microsoft.com/rest/api/storageservices/versioning-for-the-azure-storage-services for additional information.</Message>"
+          );
+        }
         return response;
       } catch (err) {
         if (typeof err === "object" && err !== null && err.response && err.response.parsedBody) {
@@ -89588,7 +89857,7 @@ __export(constants_exports, {
   URLConstants: () => URLConstants
 });
 module.exports = __toCommonJS(constants_exports);
-const SDK_VERSION = "12.4.0";
+const SDK_VERSION = "12.5.0";
 const URLConstants = {
   Parameters: {
     FORCE_BROWSER_NO_CACHE: "_",
@@ -90330,6 +90599,7 @@ function getClient(endpoint, clientOptions = {}) {
       });
     }
   }
+  const noDefaultAcceptHeader = clientOptions.internal?.noDefaultAcceptHeader ?? false;
   const { allowInsecureConnection, httpClient } = clientOptions;
   const endpointUrl = clientOptions.endpoint ?? endpoint;
   const client = (path, ...args) => {
@@ -90342,7 +90612,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       post: (requestOptions = {}) => {
@@ -90352,7 +90623,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       put: (requestOptions = {}) => {
@@ -90362,7 +90634,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       patch: (requestOptions = {}) => {
@@ -90372,7 +90645,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       delete: (requestOptions = {}) => {
@@ -90382,7 +90656,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       head: (requestOptions = {}) => {
@@ -90392,7 +90667,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       options: (requestOptions = {}) => {
@@ -90402,7 +90678,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       },
       trace: (requestOptions = {}) => {
@@ -90412,7 +90689,8 @@ function getClient(endpoint, clientOptions = {}) {
           pipeline,
           requestOptions,
           allowInsecureConnection,
-          httpClient
+          httpClient,
+          noDefaultAcceptHeader
         );
       }
     };
@@ -90423,7 +90701,7 @@ function getClient(endpoint, clientOptions = {}) {
     pipeline
   };
 }
-function buildOperation(method, url, pipeline, options, allowInsecureConnection, httpClient) {
+function buildOperation(method, url, pipeline, options, allowInsecureConnection, httpClient, noDefaultAcceptHeader = false) {
   allowInsecureConnection = options.allowInsecureConnection ?? allowInsecureConnection;
   return {
     then: function(onFulfilled, onrejected) {
@@ -90431,7 +90709,7 @@ function buildOperation(method, url, pipeline, options, allowInsecureConnection,
         method,
         url,
         pipeline,
-        { ...options, allowInsecureConnection },
+        { ...options, allowInsecureConnection, noDefaultAcceptHeader },
         httpClient
       ).then(onFulfilled, onrejected);
     },
@@ -90445,7 +90723,7 @@ function buildOperation(method, url, pipeline, options, allowInsecureConnection,
           method,
           url,
           pipeline,
-          { ...options, allowInsecureConnection, responseAsStream: true },
+          { ...options, allowInsecureConnection, noDefaultAcceptHeader, responseAsStream: true },
           httpClient
         );
       }
@@ -90456,7 +90734,7 @@ function buildOperation(method, url, pipeline, options, allowInsecureConnection,
           method,
           url,
           pipeline,
-          { ...options, allowInsecureConnection, responseAsStream: true },
+          { ...options, allowInsecureConnection, noDefaultAcceptHeader, responseAsStream: true },
           httpClient
         );
       } else {
@@ -90805,9 +91083,10 @@ function getContentType(body) {
 function buildPipelineRequest(method, url, options = {}) {
   const requestContentType = getRequestContentType(options);
   const { body, multipartBody } = getRequestBody(options.body, requestContentType);
+  const accept = options.accept ?? options.headers?.accept ?? (options.noDefaultAcceptHeader ? void 0 : "application/json");
   const headers = (0, import_httpHeaders.createHttpHeaders)({
     ...options.headers ? options.headers : {},
-    accept: options.accept ?? options.headers?.accept ?? "application/json",
+    ...accept !== void 0 && { accept },
     ...requestContentType && {
       "content-type": requestContentType
     }
@@ -90819,6 +91098,7 @@ function buildPipelineRequest(method, url, options = {}) {
     onDownloadProgress,
     timeout,
     responseAsStream,
+    noDefaultAcceptHeader: _noDefaultAcceptHeader,
     url: _url,
     method: _method,
     body: _body,
@@ -91170,7 +91450,7 @@ __export(constants_exports, {
   SDK_VERSION: () => SDK_VERSION
 });
 module.exports = __toCommonJS(constants_exports);
-const SDK_VERSION = "0.3.7";
+const SDK_VERSION = "0.3.8";
 const DEFAULT_RETRY_POLICY_COUNT = 3;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (0);
@@ -95339,7 +95619,8 @@ let key = 'v1'
 const configs = {
   linux: {
     urls: {
-      ccl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/999f135f-9aeb-4aff-be1b-3bdf5bfabab1/intel-oneccl-2022.0.0.49303_offline.sh',
+      ccl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bc26d315-1c3c-4270-92e1-6b67c130cc06/intel-oneccl-2022.1.0.145_offline.sh',
+      'ccl@2022.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bc26d315-1c3c-4270-92e1-6b67c130cc06/intel-oneccl-2022.1.0.145_offline.sh',
       'ccl@2022.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/999f135f-9aeb-4aff-be1b-3bdf5bfabab1/intel-oneccl-2022.0.0.49303_offline.sh',
       'ccl@2021.17.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c477188f-0ba1-4213-8945-22f16ebc8ecb/intel-oneccl-2021.17.2.6_offline.sh',
       'ccl@2021.17.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ecc6ecf3-aed4-48c0-bd90-cb768f96168d/intel-oneccl-2021.17.1.8_offline.sh',
@@ -95376,7 +95657,8 @@ const configs = {
       'dal@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19122/l_daal_oneapi_p_2023.0.0.25395_offline.sh',
       'dal@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19032/l_daal_oneapi_p_2021.7.1.16996_offline.sh',
 
-      dnn: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/964163c0-9651-4e14-8ebf-3cc27e2519e4/intel-onednn-2026.0.0.689_offline.sh',
+      dnn: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0451dc19-00a2-4236-bace-dc0b4aec0680/intel-onednn-2026.0.1.64_offline.sh',
+      'dnn@2026.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0451dc19-00a2-4236-bace-dc0b4aec0680/intel-onednn-2026.0.1.64_offline.sh',
       'dnn@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/964163c0-9651-4e14-8ebf-3cc27e2519e4/intel-onednn-2026.0.0.689_offline.sh',
       'dnn@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/784671be-a9aa-4264-b1f8-3dd44d5f972d/intel-onednn-2025.3.0.410_offline.sh',
       'dnn@2025.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6b523cc0-3241-4b80-bfba-ebe6c67599f6/intel-onednn-2025.2.0.562_offline.sh',
@@ -95394,7 +95676,8 @@ const configs = {
       'dnn@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19137/l_onednn_p_2023.0.0.25399_offline.sh',
       'dnn@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19035/l_onednn_p_2022.2.1.16994_offline.sh',
 
-      dpl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1ce409e2-ae79-4eb4-807f-dbe93db6672c/intel-onedpl-2022.12.0.348_offline.sh',
+      dpl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/2703adb2-b977-4b87-9dc9-acf686f1bea4/intel-onedpl-2022.13.0.111_offline.sh',
+      'dpl@2022.13.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/2703adb2-b977-4b87-9dc9-acf686f1bea4/intel-onedpl-2022.13.0.111_offline.sh',
       'dpl@2022.12.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1ce409e2-ae79-4eb4-807f-dbe93db6672c/intel-onedpl-2022.12.0.348_offline.sh',
       'dpl@2022.10.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/276fa258-4958-4be2-abf3-973dbd4cf3e2/intel-onedpl-2022.10.0.276_offline.sh',
       'dpl@2022.9.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/4f06fa3c-add6-4e58-9505-36942ba90315/intel-onedpl-2022.9.0.378_offline.sh',
@@ -95410,7 +95693,8 @@ const configs = {
       'dpl@2022.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19133/l_oneDPL_p_2022.0.0.25335_offline.sh',
       'dpl@2021.7.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19046/l_oneDPL_p_2021.7.2.15007_offline.sh',
 
-      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e2f4cda3-8891-4d0e-bf60-00d19c4e3e27/intel-dpcpp-cpp-compiler-2026.0.0.564_offline.sh',
+      icx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/eb43fd3f-7cff-46a4-ab14-a2d3b60c4899/intel-dpcpp-cpp-compiler-2026.1.0.118_offline.sh',
+      'icx@2026.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/eb43fd3f-7cff-46a4-ab14-a2d3b60c4899/intel-dpcpp-cpp-compiler-2026.1.0.118_offline.sh',
       'icx@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/e2f4cda3-8891-4d0e-bf60-00d19c4e3e27/intel-dpcpp-cpp-compiler-2026.0.0.564_offline.sh',
       'icx@2025.3.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0d61d48a-4fe8-4cb2-bd9d-94d2c19c6227/intel-dpcpp-cpp-compiler-2025.3.2.26_offline.sh',
       'icx@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/5adfc398-db78-488c-b98f-78461b3c5760/intel-dpcpp-cpp-compiler-2025.3.1.16_offline.sh',
@@ -95433,7 +95717,8 @@ const configs = {
       'icx@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19123/l_dpcpp-cpp-compiler_p_2023.0.0.25393_offline.sh',
       'icx@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19030/l_dpcpp-cpp-compiler_p_2022.2.1.16991_offline.sh',
 
-      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/176ca159-bee8-44f2-9164-db26f95de382/intel-fortran-compiler-2026.0.0.573_offline.sh',
+      ifx: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/87bd1c07-e474-4f38-9492-e44e15ea7a52/intel-fortran-compiler-2026.1.0.104_offline.sh',
+      'ifx@2026.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/87bd1c07-e474-4f38-9492-e44e15ea7a52/intel-fortran-compiler-2026.1.0.104_offline.sh',
       'ifx@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/176ca159-bee8-44f2-9164-db26f95de382/intel-fortran-compiler-2026.0.0.573_offline.sh',
       'ifx@2025.3.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3e53d136-2870-4836-adb1-892b558fa34a/intel-fortran-compiler-2025.3.2.25_offline.sh',
       'ifx@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/724303ca-6927-4327-a560-e0aabb55b010/intel-fortran-compiler-2025.3.1.16_offline.sh',
@@ -95478,7 +95763,8 @@ const configs = {
       'impi@2021.8.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19131/l_mpi_oneapi_p_2021.8.0.25329_offline.sh',
       'impi@2021.7.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19010/l_mpi_oneapi_p_2021.7.1.16815_offline.sh',
 
-      ipp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c72ad2c1-1c92-4e74-923f-a8ca1332c0cb/intel-ipp-2026.0.0.718_offline.sh',
+      ipp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1bf493cd-8dd6-4168-be51-a0c7fe171f70/intel-ipp-2026.0.1.62_offline.sh',
+      'ipp@2026.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1bf493cd-8dd6-4168-be51-a0c7fe171f70/intel-ipp-2026.0.1.62_offline.sh',
       'ipp@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c72ad2c1-1c92-4e74-923f-a8ca1332c0cb/intel-ipp-2026.0.0.718_offline.sh',
       'ipp@2022.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5ea6a8e-1b2d-4184-bf58-45c612fb2ee1/intel-ipp-2022.3.1.9_offline.sh',
       'ipp@2022.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/9efbaac1-ae4e-4f55-b6ac-37093f852a04/intel-ipp-2022.3.0.394_offline.sh',
@@ -95494,7 +95780,8 @@ const configs = {
       'ipp@2021.7.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19126/l_ipp_oneapi_p_2021.7.0.25396_offline.sh',
       'ipp@2021.6.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19007/l_ipp_oneapi_p_2021.6.2.16995_offline.sh',
 
-      ippcp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/db3a2202-3937-4149-8845-087401bd2fba/intel-cryptography-primitives-library-2026.0.0.472_offline.sh',
+      ippcp: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bdaa109d-f2ae-4b10-a8ad-a6ef8663abda/intel-cryptography-primitives-library-2026.0.1.11_offline.sh',
+      'ippcp@2026.0.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bdaa109d-f2ae-4b10-a8ad-a6ef8663abda/intel-cryptography-primitives-library-2026.0.1.11_offline.sh',
       'ippcp@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/db3a2202-3937-4149-8845-087401bd2fba/intel-cryptography-primitives-library-2026.0.0.472_offline.sh',
       'ippcp@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/acf9ea09-5527-42b0-951a-943fbd8ec0b0/intel-cryptography-primitives-library-2025.3.0.275_offline.sh',
       'ippcp@2025.2.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/60f39c8f-1f9a-4d58-80d1-452381eeed1a/intel-cryptography-primitives-library-2025.2.0.448_offline.sh',
@@ -95509,7 +95796,8 @@ const configs = {
       'ippcp@2021.6.3': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19108/l_ippcp_oneapi_p_2021.6.3.25343_offline.sh',
       'ippcp@2021.6.2': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/18999/l_ippcp_oneapi_p_2021.6.2.15006_offline.sh',
 
-      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/db60f483-f02e-4f7e-9bcd-5e01dba97444/intel-onemkl-2026.0.0.909_offline.sh',
+      mkl: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/17f37e16-768e-40d2-bcf8-c252dc6c5499/intel-onemkl-2026.1.0.237_offline.sh',
+      'mkl@2026.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/17f37e16-768e-40d2-bcf8-c252dc6c5499/intel-onemkl-2026.1.0.237_offline.sh',
       'mkl@2026.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/db60f483-f02e-4f7e-9bcd-5e01dba97444/intel-onemkl-2026.0.0.909_offline.sh',
       'mkl@2025.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/6a17080f-f0de-41b9-b587-52f92512c59a/intel-onemkl-2025.3.1.11_offline.sh',
       'mkl@2025.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/2ad98b49-1fb2-4294-ab3d-6889b434ebd3/intel-onemkl-2025.3.0.462_offline.sh',
@@ -95527,7 +95815,8 @@ const configs = {
       'mkl@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19138/l_onemkl_p_2023.0.0.25398_offline.sh',
       'mkl@2022.2.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/19038/l_onemkl_p_2022.2.1.16993_offline.sh',
 
-      tbb: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0abefd3d-79b7-44b6-9b64-d82dea1b9dae/intel-onetbb-2023.0.0.725_offline.sh',
+      tbb: 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d93b2767-7739-4b1c-8cfc-084b52f31447/intel-onetbb-2023.1.0.157_offline.sh',
+      'tbb@2023.1.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d93b2767-7739-4b1c-8cfc-084b52f31447/intel-onetbb-2023.1.0.157_offline.sh',
       'tbb@2023.0.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0abefd3d-79b7-44b6-9b64-d82dea1b9dae/intel-onetbb-2023.0.0.725_offline.sh',
       'tbb@2022.3.1': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/233a8b7a-ec95-4e51-bc5f-9dcd4f0d1dc3/intel-onetbb-2022.3.1.402_offline.sh',
       'tbb@2022.3.0': 'https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1134c0a9-1960-465a-ac29-3b692e45f417/intel-onetbb-2022.3.0.383_offline.sh',
