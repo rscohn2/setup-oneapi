@@ -40,6 +40,6 @@ repos:
   - id: doc8
 
 - repo: https://github.com/pycqa/isort
-  rev: 8.0.1
+  rev: 9.0.1
   hooks:
   - id: isort
